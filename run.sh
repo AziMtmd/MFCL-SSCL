@@ -8,4 +8,4 @@ python3 run.py
 
 echo "Ending of the script";
 
-cat script1.sh
+cat run.sh
