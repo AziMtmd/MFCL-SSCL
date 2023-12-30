@@ -15,14 +15,18 @@
 # ==============================================================================
 """Functions and classes related to optimization (weight updates)."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import re
 
-import tensorflow.compat.v2 as tf
+import tensorflow.compat.v1 as tf
 
 EETA_DEFAULT = 0.001
 
 
-class LARSOptimizer(tf.keras.optimizers.legacy.Optimizer):
+class LARSOptimizer(tf.train.Optimizer):
   """Layer-wise Adaptive Rate Scaling for large batch training.
 
   Introduced by "Large Batch Training of Convolutional Networks" by Y. You,
@@ -60,9 +64,9 @@ class LARSOptimizer(tf.keras.optimizers.legacy.Optimizer):
       eeta: A `float` for scaling of learning rate when computing trust ratio.
       name: The name for the scope.
     """
-    super(LARSOptimizer, self).__init__(name)
+    super(LARSOptimizer, self).__init__(False, name)
 
-    self._set_hyper("learning_rate", learning_rate)
+    self.learning_rate = learning_rate
     self.momentum = momentum
     self.weight_decay = weight_decay
     self.use_nesterov = use_nesterov
@@ -76,65 +80,67 @@ class LARSOptimizer(tf.keras.optimizers.legacy.Optimizer):
     else:
       self.exclude_from_layer_adaptation = exclude_from_weight_decay
 
-  def _create_slots(self, var_list):
-    for v in var_list:
-      self.add_slot(v, "Momentum")
+  def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+    assignments = []
+    for (grad, param) in grads_and_vars:
+      if grad is None or param is None:
+        continue
 
-  def _resource_apply_dense(self, grad, param, apply_state=None):
-    if grad is None or param is None:
-      return tf.no_op()
+      param_name = param.op.name
 
-    var_device, var_dtype = param.device, param.dtype.base_dtype
-    coefficients = ((apply_state or {}).get((var_device, var_dtype)) or
-                    self._fallback_apply_state(var_device, var_dtype))
-    learning_rate = coefficients["lr_t"]
+      v = tf.get_variable(
+          name=param_name + "/Momentum",
+          shape=param.shape.as_list(),
+          dtype=tf.float32,
+          trainable=False,
+          initializer=tf.zeros_initializer())
 
-    param_name = param.name
+      if self._use_weight_decay(param_name):
+        grad += self.weight_decay * param
 
-    v = self.get_slot(param, "Momentum")
+      if self.classic_momentum:
+        trust_ratio = 1.0
+        if self._do_layer_adaptation(param_name):
+          w_norm = tf.norm(param, ord=2)
+          g_norm = tf.norm(grad, ord=2)
+          trust_ratio = tf.where(
+              tf.greater(w_norm, 0), tf.where(
+                  tf.greater(g_norm, 0), (self.eeta * w_norm / g_norm),
+                  1.0),
+              1.0)
+        scaled_lr = self.learning_rate * trust_ratio
 
-    if self._use_weight_decay(param_name):
-      grad += self.weight_decay * param
-
-    if self.classic_momentum:
-      trust_ratio = 1.0
-      if self._do_layer_adaptation(param_name):
-        w_norm = tf.norm(param, ord=2)
-        g_norm = tf.norm(grad, ord=2)
-        trust_ratio = tf.where(
-            tf.greater(w_norm, 0),
-            tf.where(tf.greater(g_norm, 0), (self.eeta * w_norm / g_norm), 1.0),
-            1.0)
-      scaled_lr = learning_rate * trust_ratio
-
-      next_v = tf.multiply(self.momentum, v) + scaled_lr * grad
-      if self.use_nesterov:
-        update = tf.multiply(self.momentum, next_v) + scaled_lr * grad
+        next_v = tf.multiply(self.momentum, v) + scaled_lr * grad
+        if self.use_nesterov:
+          update = tf.multiply(self.momentum, next_v) + scaled_lr * grad
+        else:
+          update = next_v
+        next_param = param - update
       else:
-        update = next_v
-      next_param = param - update
-    else:
-      next_v = tf.multiply(self.momentum, v) + grad
-      if self.use_nesterov:
-        update = tf.multiply(self.momentum, next_v) + grad
-      else:
-        update = next_v
+        next_v = tf.multiply(self.momentum, v) + grad
+        if self.use_nesterov:
+          update = tf.multiply(self.momentum, next_v) + grad
+        else:
+          update = next_v
 
-      trust_ratio = 1.0
-      if self._do_layer_adaptation(param_name):
-        w_norm = tf.norm(param, ord=2)
-        v_norm = tf.norm(update, ord=2)
-        trust_ratio = tf.where(
-            tf.greater(w_norm, 0),
-            tf.where(tf.greater(v_norm, 0), (self.eeta * w_norm / v_norm), 1.0),
-            1.0)
-      scaled_lr = trust_ratio * learning_rate
-      next_param = param - scaled_lr * update
+        trust_ratio = 1.0
+        if self._do_layer_adaptation(param_name):
+          w_norm = tf.norm(param, ord=2)
+          v_norm = tf.norm(update, ord=2)
+          trust_ratio = tf.where(
+              tf.greater(w_norm, 0), tf.where(
+                  tf.greater(v_norm, 0), (self.eeta * w_norm / v_norm),
+                  1.0),
+              1.0)
+        scaled_lr = trust_ratio * self.learning_rate
+        next_param = param - scaled_lr * update
 
-    return tf.group(*[
-        param.assign(next_param, use_locking=False),
-        v.assign(next_v, use_locking=False)
-    ])
+      assignments.extend([param.assign(next_param), v.assign(next_v)])
+
+    if global_step is not None:
+      new_global_step = global_step + 1
+      assignments.append(global_step.assign(new_global_step))
+    return tf.group(*assignments, name=name)
 
   def _use_weight_decay(self, param_name):
     """Whether to use L2 weight decay for `param_name`."""
@@ -142,7 +148,6 @@ class LARSOptimizer(tf.keras.optimizers.legacy.Optimizer):
       return False
     if self.exclude_from_weight_decay:
       for r in self.exclude_from_weight_decay:
-        # TODO(srbs): Try to avoid name based filtering.
         if re.search(r, param_name) is not None:
           return False
     return True
@@ -151,19 +156,6 @@ class LARSOptimizer(tf.keras.optimizers.legacy.Optimizer):
     """Whether to do layer-wise learning rate adaptation for `param_name`."""
     if self.exclude_from_layer_adaptation:
       for r in self.exclude_from_layer_adaptation:
-        # TODO(srbs): Try to avoid name based filtering.
         if re.search(r, param_name) is not None:
           return False
     return True
-
-  def get_config(self):
-    config = super(LARSOptimizer, self).get_config()
-    config.update({
-        "learning_rate": self._serialize_hyperparameter("learning_rate"),
-        "momentum": self.momentum,
-        "classic_momentum": self.classic_momentum,
-        "weight_decay": self.weight_decay,
-        "eeta": self.eeta,
-        "use_nesterov": self.use_nesterov,
-    })
-    return config
