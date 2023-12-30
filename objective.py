@@ -15,35 +15,34 @@
 # ==============================================================================
 """Contrastive loss functions."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from absl import flags
 
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v2 as tf
 
-from tensorflow.compiler.tf2xla.python import xla  # pylint: disable=g-direct-tensorflow-import
+FLAGS = flags.FLAGS
 
 LARGE_NUM = 1e9
 
 
-def add_supervised_loss(labels, logits, weights, **kwargs):
-  """Compute loss for model and add it to loss collection."""
-  return tf.losses.softmax_cross_entropy(labels, logits, weights, **kwargs)
+def add_supervised_loss(labels, logits):
+  """Compute mean supervised loss over local batch."""
+  losses = tf.keras.losses.CategoricalCrossentropy(
+      from_logits=True, reduction=tf.keras.losses.Reduction.NONE)(labels,
+                                                                  logits)
+  return tf.reduce_mean(losses)
 
 
 def add_contrastive_loss(hidden,
                          hidden_norm=True,
                          temperature=1.0,
-                         tpu_context=None,
-                         weights=1.0):
+                         strategy=None):
   """Compute loss for model.
 
   Args:
-    hidden: hidden vector (`Tensor`) of shape (2 * bsz, dim).
+    hidden: hidden vector (`Tensor`) of shape (bsz, dim).
     hidden_norm: whether or not to use normalization on the hidden vector.
     temperature: a `floating` number for temperature scaling.
-    tpu_context: context information for tpu.
-    weights: a weighting number or vector.
+    strategy: context information for tpu.
 
   Returns:
     A loss scalar.
@@ -57,12 +56,14 @@ def add_contrastive_loss(hidden,
   batch_size = tf.shape(hidden1)[0]
 
   # Gather hidden1/hidden2 across replicas and create local labels.
-  if tpu_context is not None:
-    hidden1_large = tpu_cross_replica_concat(hidden1, tpu_context)
-    hidden2_large = tpu_cross_replica_concat(hidden2, tpu_context)
+  if strategy is not None:
+    hidden1_large = tpu_cross_replica_concat(hidden1, strategy)
+    hidden2_large = tpu_cross_replica_concat(hidden2, strategy)
     enlarged_batch_size = tf.shape(hidden1_large)[0]
     # TODO(iamtingchen): more elegant way to convert u32 to s32 for replica_id.
-    replica_id = tf.cast(tf.cast(xla.replica_id(), tf.uint32), tf.int32)
+    replica_context = tf.distribute.get_replica_context()
+    replica_id = tf.cast(
+        tf.cast(replica_context.replica_id_in_sync_group, tf.uint32), tf.int32)
     labels_idx = tf.range(batch_size) + replica_id * batch_size
     labels = tf.one_hot(labels_idx, enlarged_batch_size * 2)
     masks = tf.one_hot(labels_idx, enlarged_batch_size)
@@ -79,44 +80,46 @@ def add_contrastive_loss(hidden,
   logits_ab = tf.matmul(hidden1, hidden2_large, transpose_b=True) / temperature
   logits_ba = tf.matmul(hidden2, hidden1_large, transpose_b=True) / temperature
 
-  loss_a = tf.losses.softmax_cross_entropy(
-      labels, tf.concat([logits_ab, logits_aa], 1), weights=weights)
-  loss_b = tf.losses.softmax_cross_entropy(
-      labels, tf.concat([logits_ba, logits_bb], 1), weights=weights)
-  loss = loss_a + loss_b
+  loss_a = tf.nn.softmax_cross_entropy_with_logits(
+      labels, tf.concat([logits_ab, logits_aa], 1))
+  loss_b = tf.nn.softmax_cross_entropy_with_logits(
+      labels, tf.concat([logits_ba, logits_bb], 1))
+  loss = tf.reduce_mean(loss_a + loss_b)
 
   return loss, logits_ab, labels
 
 
-def tpu_cross_replica_concat(tensor, tpu_context=None):
+def tpu_cross_replica_concat(tensor, strategy=None):
   """Reduce a concatenation of the `tensor` across TPU cores.
 
   Args:
     tensor: tensor to concatenate.
-    tpu_context: A `TPUContext`. If not set, CPU execution is assumed.
+    strategy: A `tf.distribute.Strategy`. If not set, CPU execution is assumed.
 
   Returns:
     Tensor of the same rank as `tensor` with first dimension `num_replicas`
     times larger.
   """
-  if tpu_context is None or tpu_context.num_replicas <= 1:
+  if strategy is None or strategy.num_replicas_in_sync <= 1:
     return tensor
 
-  num_replicas = tpu_context.num_replicas
+  num_replicas = strategy.num_replicas_in_sync
 
+  replica_context = tf.distribute.get_replica_context()
   with tf.name_scope('tpu_cross_replica_concat'):
     # This creates a tensor that is like the input tensor but has an added
     # replica dimension as the outermost dimension. On each replica it will
     # contain the local values and zeros for all other values that need to be
     # fetched from other replicas.
     ext_tensor = tf.scatter_nd(
-        indices=[[xla.replica_id()]],
+        indices=[[replica_context.replica_id_in_sync_group]],
         updates=[tensor],
-        shape=[num_replicas] + tensor.shape.as_list())
+        shape=tf.concat([[num_replicas], tf.shape(tensor)], axis=0))
 
     # As every value is only present on one replica and 0 in all others, adding
     # them all together will result in the full tensor on all replicas.
-    ext_tensor = tf.tpu.cross_replica_sum(ext_tensor)
+    ext_tensor = replica_context.all_reduce(tf.distribute.ReduceOp.SUM,
+                                            ext_tensor)
 
     # Flatten the replica dimension.
     # The first dimension size will be: tensor.shape[0] * num_replicas
