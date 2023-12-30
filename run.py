@@ -86,11 +86,11 @@ flags.DEFINE_integer(
     'checkpoint_epochs.')
 
 flags.DEFINE_string(
-    'eval_split', 'validation',
+    'eval_split', 'test',
     'Split for evaluation.')
 
 flags.DEFINE_string(
-    'dataset', 'imagenet2012',
+    'dataset', 'cifar10',
     'Name of a dataset.')
 
 flags.DEFINE_bool(
@@ -131,11 +131,11 @@ flags.DEFINE_string(
     'in-process master.')
 
 flags.DEFINE_string(
-    'model_dir', None,
+    'model_dir', 'azi',
     'Model directory for training.')
 
 flags.DEFINE_string(
-    'data_dir', None,
+    'data_dir', 'azi',
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
