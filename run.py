@@ -131,11 +131,11 @@ flags.DEFINE_string(
     'in-process master.')
 
 flags.DEFINE_string(
-    'model_dir', 'azi',
+    'model_dir', '/azi',
     'Model directory for training.')
 
 flags.DEFINE_string(
-    'data_dir', 'azi',
+    'data_dir', '/azi',
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
