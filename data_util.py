@@ -15,16 +15,9 @@
 # ==============================================================================
 """Data preprocessing and augmentation."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import functools
-from absl import flags
 
-import tensorflow.compat.v1 as tf
-
-FLAGS = flags.FLAGS
+import tensorflow.compat.v2 as tf
 
 CROP_PROPORTION = 0.875  # Standard for ImageNet.
 
@@ -32,17 +25,16 @@ CROP_PROPORTION = 0.875  # Standard for ImageNet.
 def random_apply(func, p, x):
   """Randomly apply function func to x with probability p."""
   return tf.cond(
-      tf.less(tf.random_uniform([], minval=0, maxval=1, dtype=tf.float32),
-              tf.cast(p, tf.float32)),
-      lambda: func(x),
-      lambda: x)
+      tf.less(
+          tf.random.uniform([], minval=0, maxval=1, dtype=tf.float32),
+          tf.cast(p, tf.float32)), lambda: func(x), lambda: x)
 
 
 def random_brightness(image, max_delta, impl='simclrv2'):
   """A multiplicative vs additive change of brightness."""
   if impl == 'simclrv2':
-    factor = tf.random_uniform(
-        [], tf.maximum(1.0 - max_delta, 0), 1.0 + max_delta)
+    factor = tf.random.uniform([], tf.maximum(1.0 - max_delta, 0),
+                               1.0 + max_delta)
     image = image * factor
   elif impl == 'simclrv1':
     image = tf.image.random_brightness(image, max_delta=max_delta)
@@ -174,7 +166,7 @@ def color_jitter_rand(image,
                   lambda: tf.cond(tf.less(i, 3), saturation_foo, hue_foo))
       return x
 
-    perm = tf.random_shuffle(tf.range(4))
+    perm = tf.random.shuffle(tf.range(4))
     for i in range(4):
       image = apply_transform(perm[i], image)
       image = tf.clip_by_value(image, 0., 1.)
@@ -202,18 +194,19 @@ def _compute_crop_shape(
   image_height_float = tf.cast(image_height, tf.float32)
 
   def _requested_aspect_ratio_wider_than_image():
-    crop_height = tf.cast(tf.rint(
-        crop_proportion / aspect_ratio * image_width_float), tf.int32)
-    crop_width = tf.cast(tf.rint(
-        crop_proportion * image_width_float), tf.int32)
+    crop_height = tf.cast(
+        tf.math.rint(crop_proportion / aspect_ratio * image_width_float),
+        tf.int32)
+    crop_width = tf.cast(
+        tf.math.rint(crop_proportion * image_width_float), tf.int32)
     return crop_height, crop_width
 
   def _image_wider_than_requested_aspect_ratio():
     crop_height = tf.cast(
-        tf.rint(crop_proportion * image_height_float), tf.int32)
-    crop_width = tf.cast(tf.rint(
-        crop_proportion * aspect_ratio *
-        image_height_float), tf.int32)
+        tf.math.rint(crop_proportion * image_height_float), tf.int32)
+    crop_width = tf.cast(
+        tf.math.rint(crop_proportion * aspect_ratio * image_height_float),
+        tf.int32)
     return crop_height, crop_width
 
   return tf.cond(
@@ -244,7 +237,8 @@ def center_crop(image, height, width, crop_proportion):
   image = tf.image.crop_to_bounding_box(
       image, offset_height, offset_width, crop_height, crop_width)
 
-  image = tf.image.resize_bicubic([image], [height, width])[0]
+  image = tf.image.resize([image], [height, width],
+                          method=tf.image.ResizeMethod.BICUBIC)[0]
 
   return image
 
@@ -280,7 +274,7 @@ def distorted_bounding_box_crop(image,
   Returns:
     (cropped image `Tensor`, distorted bbox `Tensor`).
   """
-  with tf.name_scope(scope, 'distorted_bounding_box_crop', [image, bbox]):
+  with tf.name_scope(scope or 'distorted_bounding_box_crop'):
     shape = tf.shape(image)
     sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
         shape,
@@ -322,7 +316,8 @@ def crop_and_resize(image, height, width):
       area_range=(0.08, 1.0),
       max_attempts=100,
       scope=None)
-  return tf.image.resize_bicubic([image], [height, width])[0]
+  return tf.image.resize([image], [height, width],
+                         method=tf.image.ResizeMethod.BICUBIC)[0]
 
 
 def gaussian_blur(image, kernel_size, sigma, padding='SAME'):
@@ -340,11 +335,11 @@ def gaussian_blur(image, kernel_size, sigma, padding='SAME'):
   Returns:
     A Tensor representing the blurred image.
   """
-  radius = tf.to_int32(kernel_size / 2)
+  radius = tf.cast(kernel_size / 2, dtype=tf.int32)
   kernel_size = radius * 2 + 1
-  x = tf.to_float(tf.range(-radius, radius + 1))
-  blur_filter = tf.exp(
-      -tf.pow(x, 2.0) / (2.0 * tf.pow(tf.to_float(sigma), 2.0)))
+  x = tf.cast(tf.range(-radius, radius + 1), dtype=tf.float32)
+  blur_filter = tf.exp(-tf.pow(x, 2.0) /
+                       (2.0 * tf.pow(tf.cast(sigma, dtype=tf.float32), 2.0)))
   blur_filter /= tf.reduce_sum(blur_filter)
   # One vertical and one horizontal filter.
   blur_v = tf.reshape(blur_filter, [kernel_size, 1, 1, 1])
@@ -384,11 +379,12 @@ def random_crop_with_resize(image, height, width, p=1.0):
   return random_apply(_transform, p=p, x=image)
 
 
-def random_color_jitter(image, p=1.0, impl='simclrv2'):
+def random_color_jitter(image, p=1.0, strength=1.0,
+                        impl='simclrv2'):
 
   def _transform(image):
     color_jitter_t = functools.partial(
-        color_jitter, strength=FLAGS.color_jitter_strength, impl=impl)
+        color_jitter, strength=strength, impl=impl)
     image = random_apply(color_jitter_t, p=0.8, x=image)
     return random_apply(to_grayscale, p=0.2, x=image)
   return random_apply(_transform, p=p, x=image)
@@ -429,7 +425,7 @@ def batch_random_blur(images_list, height, width, blur_probability=0.5):
   def generate_selector(p, bsz):
     shape = [bsz, 1, 1, 1]
     selector = tf.cast(
-        tf.less(tf.random_uniform(shape, 0, 1, dtype=tf.float32), p),
+        tf.less(tf.random.uniform(shape, 0, 1, dtype=tf.float32), p),
         tf.float32)
     return selector
 
@@ -447,7 +443,7 @@ def batch_random_blur(images_list, height, width, blur_probability=0.5):
 def preprocess_for_train(image,
                          height,
                          width,
-                         color_distort=True,
+                         color_jitter_strength=0.,
                          crop=True,
                          flip=True,
                          impl='simclrv2'):
@@ -457,11 +453,12 @@ def preprocess_for_train(image,
     image: `Tensor` representing an image of arbitrary size.
     height: Height of output image.
     width: Width of output image.
-    color_distort: Whether to apply the color distortion.
+    color_jitter_strength: `float` between 0 and 1 indicating the color
+      distortion strength, disable color distortion if not bigger than 0.
     crop: Whether to crop the image.
     flip: Whether or not to flip left and right of an image.
     impl: 'simclrv1' or 'simclrv2'.  Whether to use simclrv1 or simclrv2's
-        version of random brightness.
+      version of random brightness.
 
   Returns:
     A preprocessed image `Tensor`.
@@ -470,8 +467,9 @@ def preprocess_for_train(image,
     image = random_crop_with_resize(image, height, width)
   if flip:
     image = tf.image.random_flip_left_right(image)
-  if color_distort:
-    image = random_color_jitter(image, impl=impl)
+  if color_jitter_strength > 0:
+    image = random_color_jitter(image, strength=color_jitter_strength,
+                                impl=impl)
   image = tf.reshape(image, [height, width, 3])
   image = tf.clip_by_value(image, 0., 1.)
   return image
@@ -497,7 +495,7 @@ def preprocess_for_eval(image, height, width, crop=True):
 
 
 def preprocess_image(image, height, width, is_training=False,
-                     color_distort=True, test_crop=True):
+                     color_jitter_strength=0., test_crop=True):
   """Preprocesses the given image.
 
   Args:
@@ -505,7 +503,8 @@ def preprocess_image(image, height, width, is_training=False,
     height: Height of output image.
     width: Width of output image.
     is_training: `bool` for whether the preprocessing is for training.
-    color_distort: whether to apply the color distortion.
+    color_jitter_strength: `float` between 0 and 1 indicating the color
+      distortion strength, disable color distortion if not bigger than 0.
     test_crop: whether or not to extract a central crop of the images
         (as for standard ImageNet evaluation) during the evaluation.
 
@@ -514,6 +513,6 @@ def preprocess_image(image, height, width, is_training=False,
   """
   image = tf.image.convert_image_dtype(image, dtype=tf.float32)
   if is_training:
-    return preprocess_for_train(image, height, width, color_distort)
+    return preprocess_for_train(image, height, width, color_jitter_strength)
   else:
     return preprocess_for_eval(image, height, width, test_crop)
