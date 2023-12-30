@@ -86,11 +86,11 @@ flags.DEFINE_integer(
     'checkpoint_epochs.')
 
 flags.DEFINE_string(
-    'eval_split', 'test',
+    'eval_split', 'validation',
     'Split for evaluation.')
 
 flags.DEFINE_string(
-    'dataset', 'cifar10',
+    'dataset', 'imagenet2012',
     'Name of a dataset.')
 
 flags.DEFINE_bool(
@@ -131,7 +131,7 @@ flags.DEFINE_string(
     'in-process master.')
 
 flags.DEFINE_string(
-    'model_dir', '/content',
+    'model_dir', None,
     'Model directory for training.')
 
 flags.DEFINE_string(
@@ -139,7 +139,7 @@ flags.DEFINE_string(
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
-    'use_tpu', False,
+    'use_tpu', True,
     'Whether to run on TPU.')
 
 flags.DEFINE_string(
