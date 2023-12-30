@@ -139,7 +139,7 @@ flags.DEFINE_string(
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
-    'use_tpu', True,
+    'use_tpu', False,
     'Whether to run on TPU.')
 
 flags.DEFINE_string(
