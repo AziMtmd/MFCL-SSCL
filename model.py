@@ -14,6 +14,7 @@
 # limitations under the License.
 # ==============================================================================
 """Model specification for SimCLR."""
+
 import math
 from absl import flags
 
@@ -21,16 +22,16 @@ import data_util
 import lars_optimizer
 import resnet
 import tensorflow.compat.v2 as tf
-from tensorflow.keras.layers import Conv2DTranspose, MaxPool2D
 
 FLAGS = flags.FLAGS
+
 
 def build_optimizer(learning_rate):
   """Returns the optimizer."""
   if FLAGS.optimizer == 'momentum':
     return tf.keras.optimizers.SGD(learning_rate, FLAGS.momentum, nesterov=True)
   elif FLAGS.optimizer == 'adam':
-    return tf.keras.optimizers.Adam(0.001)    
+    return tf.keras.optimizers.Adam(learning_rate)
   elif FLAGS.optimizer == 'lars':
     return lars_optimizer.LARSOptimizer(
         learning_rate,
@@ -212,45 +213,6 @@ class ProjectionHead(tf.keras.layers.Layer):
     return proj_head_output, hiddens_list[FLAGS.ft_proj_selector]
 
 
-class Decoder_1(tf.keras.layers.Layer):
-
-  def __init__(self, **kwargs):
-    self.initial_conv_relu_max_pool=[]
-    self.initial_conv_relu_max_pool.append(MaxPool2D())
-    self.initial_conv_relu_max_pool.append(
-        resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
-  
-    self.initial_conv_relu_max_pool.append(Conv2DTranspose(
-            filters=64 * FLAGS.width_multiplier,
-            kernel_size=2,
-            strides=(2,2),
-            data_format='channels_last',
-            trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(
-        resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(
-        resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(
-        resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
-
-    self.initial_conv_relu_max_pool.append(Conv2DTranspose(              
-            filters=3 * FLAGS.width_multiplier,
-            kernel_size=1,
-            strides=1,
-            data_format='channels_last',
-            trainable=FLAGS.module1_train))
-
-    super(Decoder_1, self).__init__(**kwargs)
-
-  def call(self, inputs, training):
-    if FLAGS.module1_train == False:
-      return inputs  # directly use the output hiddens as hiddens
-    if FLAGS.module1_train == True:
-      for layer in self.initial_conv_relu_max_pool:
-        inputs = layer(inputs, training=FLAGS.module1_train)
-        # inputs = tf.identity(inputs, name='logits_sup')
-      return inputs
-
 class SupervisedHead(tf.keras.layers.Layer):
 
   def __init__(self, num_classes, name='head_supervised', **kwargs):
@@ -285,16 +247,16 @@ class Model(tf.keras.models.Model):
     if inputs.shape[3] is None:
       raise ValueError('The input channels dimension must be statically known '
                        f'(got input shape {inputs.shape})')
-    # num_transforms = inputs.shape[3] // 3
-    # num_transforms = tf.repeat(3, num_transforms)
-    # # Split channels, and optionally apply extra batched augmentation.
-    # features_list = tf.split(
-    #     features, num_or_size_splits=num_transforms, axis=-1)
-    # if FLAGS.use_blur and training and FLAGS.train_mode == 'pretrain':
-    #   features_list = data_util.batch_random_blur(features_list,
-    #                                               FLAGS.image_size,
-    #                                               FLAGS.image_size)
-    # features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
+    num_transforms = inputs.shape[3] // 3
+    num_transforms = tf.repeat(3, num_transforms)
+    # Split channels, and optionally apply extra batched augmentation.
+    features_list = tf.split(
+        features, num_or_size_splits=num_transforms, axis=-1)
+    if FLAGS.use_blur and training and FLAGS.train_mode == 'pretrain':
+      features_list = data_util.batch_random_blur(features_list,
+                                                  FLAGS.image_size,
+                                                  FLAGS.image_size)
+    features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
 
     # Base network forward pass.
     hiddens = self.resnet_model(features, training=training)
@@ -316,43 +278,3 @@ class Model(tf.keras.models.Model):
       return projection_head_outputs, supervised_head_outputs
     else:
       return projection_head_outputs, None
-
-class Module_1(tf.keras.models.Model):
-  """Resnet model with projection or supervised layer."""
-
-  def __init__(self, num_classes, **kwargs):
-    super(Module_1, self).__init__(**kwargs)
-    self.resnet_module_1 = resnet.resnet_1(
-        resnet_depth=FLAGS.resnet_depth,
-        width_multiplier=FLAGS.width_multiplier,
-        cifar_stem=FLAGS.image_size <= 32)
-    self._decoder_1= Decoder_1()
-
-  def __call__(self, inputs, training):
-    features = inputs
-    if training and FLAGS.train_mode == 'pretrain':
-      if FLAGS.fine_tune_after_block > -1:
-        raise ValueError('Does not support layer freezing during pretraining,'
-                         'should set fine_tune_after_block<=-1 for safety.')
-    if inputs.shape[3] is None:
-      raise ValueError('The input channels dimension must be statically known '
-                       f'(got input shape {inputs.shape})')
-    num_transforms = inputs.shape[3] // 3
-    num_transforms = tf.repeat(3, num_transforms)
-    # Split channels, and optionally apply extra batched augmentation.
-    features_list = tf.split(
-        features, num_or_size_splits=num_transforms, axis=-1)
-    if FLAGS.use_blur and training and FLAGS.train_mode == 'pretrain':
-      features_list = data_util.batch_random_blur(features_list,
-                                                  FLAGS.image_size,
-                                                  FLAGS.image_size)
-    features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
-
-    # Base network forward pass.
-    hiddens = self.resnet_module_1(features, training=FLAGS.module1_train)
-    if FLAGS.module1_train==True:
-      hiddens = self._decoder_1(hiddens, training=FLAGS.module1_train)
-      return hiddens
-    else:
-      return hiddens
-      
