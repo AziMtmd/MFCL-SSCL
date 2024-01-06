@@ -32,12 +32,6 @@ def add_supervised_loss(labels, logits):
   return tf.reduce_mean(losses)
 
 
-def add_usupervised_loss(labels, logits):
-  """Compute mean supervised loss over local batch."""
-  losses = tf.keras.losses.binary_crossentropy(labels, logits)
-  return tf.reduce_mean(losses)
-
-
 def add_contrastive_loss(hidden,
                          hidden_norm=True,
                          temperature=1.0,
