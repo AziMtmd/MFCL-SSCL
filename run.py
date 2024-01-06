@@ -29,7 +29,10 @@ import objective as obj_lib
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets as tfds
 
+
+
 FLAGS = flags.FLAGS
+
 
 flags.DEFINE_float(
     'learning_rate', 0.3,
@@ -53,20 +56,12 @@ flags.DEFINE_integer(
     'train_batch_size', 512,
     'Batch size for training.')
 
-flags.DEFINE_integer(
-    'train_batch_size_1', 64,
-    'Batch size for training.')
-
-flags.DEFINE_bool(
-    'module1_train', True,
-    'If the network is ready to make the representations for the next step')
-
 flags.DEFINE_string(
     'train_split', 'train',
     'Split for training.')
 
 flags.DEFINE_integer(
-    'train_epochs', 10,
+    'train_epochs', 100,
     'Number of epochs to train for.')
 
 flags.DEFINE_integer(
@@ -105,7 +100,7 @@ flags.DEFINE_bool(
     'improve performance.')
 
 flags.DEFINE_enum(
-    'mode', 'train_then_eval', ['train', 'eval', 'train_then_eval'],
+    'mode', 'train', ['train', 'eval', 'train_then_eval'],
     'Whether to perform training or evaluation.')
 
 flags.DEFINE_enum(
@@ -350,7 +345,7 @@ def json_serializable(val):
     return False
 
 
-def perform_evaluation(model, model_1, builder, eval_steps, ckpt, strategy, topology):
+def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
   """Perform evaluation."""
   if FLAGS.train_mode == 'pretrain' and not FLAGS.lineareval_while_pretraining:
     logging.info('Skipping eval during pretraining without linear eval.')
@@ -380,8 +375,7 @@ def perform_evaluation(model, model_1, builder, eval_steps, ckpt, strategy, topo
     logging.info('Performing eval at step %d', global_step.numpy())
 
   def single_step(features, labels):
-    rep = model_1(features, training=False)
-    _, supervised_head_outputs = model(rep, training=False)
+    _, supervised_head_outputs = model(features, training=False)
     assert supervised_head_outputs is not None
     outputs = supervised_head_outputs
     l = labels['labels']
@@ -433,7 +427,7 @@ def perform_evaluation(model, model_1, builder, eval_steps, ckpt, strategy, topo
     json.dump(serializable_flags, f)
 
   # Export as SavedModel for finetuning and inference.
-  # save(model, global_step=result['global_step'])
+  save(model, global_step=result['global_step'])
 
   return result
 
@@ -479,10 +473,11 @@ def main(argv):
   num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
   num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
   num_classes = builder.info.features['label'].num_classes
-  train_steps = model_lib.get_train_steps(num_train_examples) 
+
+  train_steps = model_lib.get_train_steps(num_train_examples)
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-  epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size_1))
+  epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
 
   logging.info('# train examples: %d', num_train_examples)
   logging.info('# train_steps: %d', train_steps)
@@ -493,34 +488,33 @@ def main(argv):
       FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
 
   topology = None
-  # if FLAGS.use_tpu:
-  #   if FLAGS.tpu_name:
-  #     cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
-  #         FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
-  #   else:
-  #     cluster = tf.distribute.cluster_resolver.TPUClusterResolver(FLAGS.master)
-  #   tf.config.experimental_connect_to_cluster(cluster)
-  #   topology = tf.tpu.experimental.initialize_tpu_system(cluster)
-  #   logging.info('Topology:')
-  #   logging.info('num_tasks: %d', topology.num_tasks)
-  #   logging.info('num_tpus_per_task: %d', topology.num_tpus_per_task)
-  #   strategy = tf.distribute.TPUStrategy(cluster)
+  if FLAGS.use_tpu:
+    if FLAGS.tpu_name:
+      cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
+          FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+    else:
+      cluster = tf.distribute.cluster_resolver.TPUClusterResolver(FLAGS.master)
+    tf.config.experimental_connect_to_cluster(cluster)
+    topology = tf.tpu.experimental.initialize_tpu_system(cluster)
+    logging.info('Topology:')
+    logging.info('num_tasks: %d', topology.num_tasks)
+    logging.info('num_tpus_per_task: %d', topology.num_tpus_per_task)
+    strategy = tf.distribute.TPUStrategy(cluster)
 
-  # else:
-  #   # For (multiple) GPUs.
-  strategy = tf.distribute.MirroredStrategy()
-  logging.info('Running using MirroredStrategy on %d replicas',
-                strategy.num_replicas_in_sync)
+  else:
+    # For (multiple) GPUs.
+    strategy = tf.distribute.MirroredStrategy()
+    logging.info('Running using MirroredStrategy on %d replicas',
+                 strategy.num_replicas_in_sync)
 
   with strategy.scope():
-    model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
     for ckpt in tf.train.checkpoints_iterator(
         FLAGS.model_dir, min_interval_secs=15):
       result = perform_evaluation(model, builder, eval_steps, ckpt, strategy,
-                                  topology)#******************
+                                  topology)
       if result['global_step'] >= train_steps:
         logging.info('Eval complete. Exiting...')
         return
@@ -528,20 +522,13 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds1 = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size_1,
-                                              True, strategy, topology)
-
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size,
                                               True, strategy, topology)
+
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate,
                                                      num_train_examples)
-      FLAGS.optimizer='adam'
-      optimizer_1 = model_lib.build_optimizer(0.001)
-
-      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
-
 
       # Build metrics.
       all_metrics = []  # For summaries.
@@ -549,13 +536,11 @@ def main(argv):
       total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
       all_metrics.extend([weight_decay_metric, total_loss_metric])
       if FLAGS.train_mode == 'pretrain':
-        unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
-        unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
         contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
         contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
-        contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
+        contrast_entropy_metric = tf.keras.metrics.Mean(
+            'train/contrast_entropy')
         all_metrics.extend([
-            unsupervised_loss_metric, unsupervised_acc_metric,
             contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric
         ])
       if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
@@ -564,54 +549,12 @@ def main(argv):
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
       # Restore checkpoint if available.
-      checkpoint_manager_1 = try_restore_from_checkpoint(
-          model_1, optimizer_1.iterations, optimizer_1)
-      
       checkpoint_manager = try_restore_from_checkpoint(
           model, optimizer.iterations, optimizer)
 
     steps_per_loop = checkpoint_steps
 
-    def single_step_1(features, labels):
-      with tf.GradientTape() as tape:
-        should_record = tf.equal((optimizer_1.iterations + 1) % steps_per_loop, 0)
-        with tf.summary.record_if(should_record):
-          tf.summary.image(
-              'image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
-
-        hdd = model_1(features, training=True)
-        loss = None
-        num_transforms = features.shape[3] // 3
-        num_transforms = tf.repeat(3, num_transforms)
-        features_list = tf.split(features, num_or_size_splits=num_transforms, axis=-1)
-        fea = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
-        if hdd is not None:
-          outputs = hdd          
-          unsup_loss = obj_lib.add_usupervised_loss(fea, outputs)
-          if loss is None:
-            loss = unsup_loss
-          else:
-            loss += unsup_loss
-          
-          metrics.update_finetune_metrics_train(unsupervised_loss_metric,
-                                                unsupervised_acc_metric, loss,
-                                                fea, outputs)
-
-        # weight_decay = model_lib.add_weight_decay(
-        #     model, adjust_per_optimizer=True)
-        # weight_decay_metric.update_state(weight_decay)
-        # loss += weight_decay
-        total_loss_metric.update_state(loss)
-        loss = loss / strategy.num_replicas_in_sync
-        print('\\\\\loss////', loss)
-        logging.info('Trainable variables:')
-        for var in model_1.trainable_variables:
-          logging.info(var.name)
-        grads = tape.gradient(loss, model_1.trainable_variables)
-        optimizer_1.apply_gradients(zip(grads, model_1.trainable_variables))
-    
     def single_step(features, labels):
-      FLAGS.module1_train=False
       with tf.GradientTape() as tape:
         # Log summaries on the last step of the training loop to match
         # logging frequency of other scalar summaries.
@@ -631,10 +574,8 @@ def main(argv):
           # Only log augmented images for the first tower.
           tf.summary.image(
               'image', features[:, :, :, :3], step=optimizer.iterations + 1)
-
-        rep = model_1(features, training=False)
         projection_head_outputs, supervised_head_outputs = model(
-            rep, training=True)
+            features, training=True)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -684,43 +625,6 @@ def main(argv):
 
       @tf.function
       def train_multiple_steps(iterator):
-        for _ in tf.range(steps_per_loop):
-          with tf.name_scope(''):
-            images, labels = next(iterator)
-            features, labels = images, {'labels': labels}
-            strategy.run(single_step_1, (features, labels))
-
-      global_step = optimizer_1.iterations
-      cur_step = global_step.numpy()
-      iterator = iter(ds1)
-      while cur_step < train_steps:
-        with summary_writer.as_default():
-          train_multiple_steps(iterator)
-          cur_step = global_step.numpy()
-          checkpoint_manager_1.save(cur_step)
-          logging.info('Completed: %d / %d steps', cur_step, train_steps)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
-          tf.summary.scalar(
-              'learning_rate',
-              learning_rate(tf.cast(global_step, dtype=tf.float32)),
-              global_step)
-          summary_writer.flush()
-        for metric in all_metrics:
-          metric.reset_states()
-      logging.info('Training 1 complete...')
-
-    FLAGS.train_epochs=100
-    train_steps = model_lib.get_train_steps(num_train_examples) #tek
-    epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
-    logging.info('# train_steps: %d', train_steps)#tek
-    checkpoint_steps = (
-      FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
-    steps_per_loop = checkpoint_steps
-
-    with strategy.scope():
-
-      @tf.function
-      def train_multiple_steps(iterator):
         # `tf.range` is needed so that this runs in a `tf.while_loop` and is
         # not unrolled.
         for _ in tf.range(steps_per_loop):
@@ -752,12 +656,12 @@ def main(argv):
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
-      logging.info('Training 2 complete...')
+      logging.info('Training complete...')
 
     if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(model, model_1, builder, eval_steps,
+      perform_evaluation(model, builder, eval_steps,
                          checkpoint_manager.latest_checkpoint, strategy,
-                         topology)#*************
+                         topology)
 
 
 if __name__ == '__main__':
