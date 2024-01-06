@@ -22,11 +22,11 @@ Residual networks (ResNets) were proposed in:
 
 from absl import flags
 import tensorflow.compat.v2 as tf
+from tensorflow.keras.layers import Conv2DTranspose, MaxPool2D
 
 
 FLAGS = flags.FLAGS
 BATCH_NORM_EPSILON = 1e-5
-
 
 class BatchNormRelu(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
@@ -179,6 +179,37 @@ class FixedPadding(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
     return padded_inputs
 
+class Conv2DTransposeFixedPadding(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
+
+  def __init__(self,
+               filters,
+               kernel_size,
+               strides,
+               data_format='channels_last',
+               **kwargs):
+    super(Conv2DTransposeFixedPadding, self).__init__(**kwargs)
+    if strides > 1:
+      self.fixed_padding = FixedPadding(kernel_size, data_format=data_format)
+    else:
+      self.fixed_padding = None
+    self.Conv2DTranspose = tf.keras.layers.Conv2DTranspose(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=('SAME' if strides == 1 else 'VALID'),
+        use_bias=False,
+        kernel_initializer=tf.keras.initializers.VarianceScaling(),
+        data_format=data_format)
+
+  def call(self, inputs, training):
+    if self.fixed_padding:
+      inputs = self.fixed_padding(inputs, training=training)
+    return self.Conv2DTranspose(inputs, training=training)
+
+class IdentityLayer(tf.keras.layers.Layer):
+
+  def call(self, inputs, training):
+    return tf.identity(inputs)
 
 class Conv2dFixedPadding(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
@@ -526,6 +557,125 @@ class BlockGroup(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
     return tf.identity(inputs, self._name)
 
 
+class Resnet_Module_1(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
+
+  def __init__(self,
+               block_fn,
+               layers,
+               width_multiplier,
+               cifar_stem=False,
+               data_format='channels_last',
+               dropblock_keep_probs=None,
+               dropblock_size=None,
+               **kwargs):
+    super(Resnet_Module_1, self).__init__(**kwargs)
+    self.data_format = data_format
+    if dropblock_keep_probs is None:
+      dropblock_keep_probs = [None] * 4
+    if not isinstance(dropblock_keep_probs,
+                      list) or len(dropblock_keep_probs) != 4:
+      raise ValueError('dropblock_keep_probs is not valid:',
+                       dropblock_keep_probs)
+    # trainable = (
+        # FLAGS.train_mode != 'finetune' or FLAGS.fine_tune_after_block == -1)
+    trainable=FLAGS.module1_train
+    
+    self.initial_conv_relu_max_pool = []
+    self.encoder = []
+    if cifar_stem:
+      self.encoder.append(
+          Conv2dFixedPadding(
+              filters=64 * width_multiplier,
+              kernel_size=3,
+              strides=1,
+              data_format=data_format,
+              trainable=trainable))
+      self.encoder.append(
+          IdentityLayer(name='initial_conv', trainable=trainable))
+      self.encoder.append(
+          BatchNormRelu(data_format=data_format, trainable=trainable))
+      self.encoder.append(
+          IdentityLayer(name='initial_max_pool', trainable=trainable))
+
+      # self.initial_conv_relu_max_pool.append(MaxPool2D())
+      # self.initial_conv_relu_max_pool.append(
+      #     IdentityLayer(name='initial_max_pool', trainable=trainable))
+    
+      # self.initial_conv_relu_max_pool.append(Conv2DTranspose(
+      #         filters=64 * width_multiplier,
+      #         kernel_size=2,
+      #         strides=(2,2),
+      #         data_format=data_format,
+      #         trainable=trainable))
+      # self.initial_conv_relu_max_pool.append(
+      #     IdentityLayer(name='initial_conv', trainable=trainable))
+      # self.initial_conv_relu_max_pool.append(
+      #     BatchNormRelu(data_format=data_format, trainable=trainable))
+      # self.initial_conv_relu_max_pool.append(
+      #     IdentityLayer(name='initial_max_pool', trainable=trainable))
+
+      # self.initial_conv_relu_max_pool.append(Conv2DTranspose(              
+      #         filters=3 * width_multiplier,
+      #         kernel_size=1,
+      #         strides=1,
+      #         data_format=data_format,
+      #         trainable=trainable))
+    # else:
+    #   if FLAGS.sk_ratio > 0:  # Use ResNet-D (https://arxiv.org/abs/1812.01187)
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier // 2,
+    #             kernel_size=3,
+    #             strides=2,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         BatchNormRelu(data_format=data_format, trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier // 2,
+    #             kernel_size=3,
+    #             strides=1,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         BatchNormRelu(data_format=data_format, trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier,
+    #             kernel_size=3,
+    #             strides=1,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #   else:
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier,
+    #             kernel_size=7,
+    #             strides=2,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_conv', trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       BatchNormRelu(data_format=data_format, trainable=trainable))
+
+    #   self.initial_conv_relu_max_pool.append(
+    #       tf.keras.layers.MaxPooling2D(
+    #           pool_size=3,
+    #           strides=2,
+    #           padding='SAME',
+    #           data_format=data_format,
+    #           trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_max_pool', trainable=trainable))
+
+  def call(self, inputs, training):
+    for layer in self.encoder:
+      inputs = layer(inputs, training=FLAGS.module1_train)
+
+    return inputs
+
 class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
   def __init__(self,
@@ -547,70 +697,72 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
                        dropblock_keep_probs)
     trainable = (
         FLAGS.train_mode != 'finetune' or FLAGS.fine_tune_after_block == -1)
-    self.initial_conv_relu_max_pool = []
-    if cifar_stem:
-      self.initial_conv_relu_max_pool.append(
-          Conv2dFixedPadding(
-              filters=64 * width_multiplier,
-              kernel_size=3,
-              strides=1,
-              data_format=data_format,
-              trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_conv', trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          BatchNormRelu(data_format=data_format, trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_max_pool', trainable=trainable))
-    else:
-      if FLAGS.sk_ratio > 0:  # Use ResNet-D (https://arxiv.org/abs/1812.01187)
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier // 2,
-                kernel_size=3,
-                strides=2,
-                data_format=data_format,
-                trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            BatchNormRelu(data_format=data_format, trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier // 2,
-                kernel_size=3,
-                strides=1,
-                data_format=data_format,
-                trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            BatchNormRelu(data_format=data_format, trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier,
-                kernel_size=3,
-                strides=1,
-                data_format=data_format,
-                trainable=trainable))
-      else:
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier,
-                kernel_size=7,
-                strides=2,
-                data_format=data_format,
-                trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_conv', trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          BatchNormRelu(data_format=data_format, trainable=trainable))
+    print('trainable...................', trainable)
+    # self.initial_conv_relu_max_pool = []
+    # print('cifar_stem......', cifar_stem)
+    # if cifar_stem:
+    #   self.initial_conv_relu_max_pool.append(
+    #       Conv2dFixedPadding(
+    #           filters=64 * width_multiplier,
+    #           kernel_size=3,
+    #           strides=1,
+    #           data_format=data_format,
+    #           trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_conv', trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       BatchNormRelu(data_format=data_format, trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_max_pool', trainable=trainable))
+    # else:
+    #   if FLAGS.sk_ratio > 0:  # Use ResNet-D (https://arxiv.org/abs/1812.01187)
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier // 2,
+    #             kernel_size=3,
+    #             strides=2,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         BatchNormRelu(data_format=data_format, trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier // 2,
+    #             kernel_size=3,
+    #             strides=1,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         BatchNormRelu(data_format=data_format, trainable=trainable))
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier,
+    #             kernel_size=3,
+    #             strides=1,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #   else:
+    #     self.initial_conv_relu_max_pool.append(
+    #         Conv2dFixedPadding(
+    #             filters=64 * width_multiplier,
+    #             kernel_size=7,
+    #             strides=2,
+    #             data_format=data_format,
+    #             trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_conv', trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       BatchNormRelu(data_format=data_format, trainable=trainable))
 
-      self.initial_conv_relu_max_pool.append(
-          tf.keras.layers.MaxPooling2D(
-              pool_size=3,
-              strides=2,
-              padding='SAME',
-              data_format=data_format,
-              trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_max_pool', trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       tf.keras.layers.MaxPooling2D(
+    #           pool_size=3,
+    #           strides=2,
+    #           padding='SAME',
+    #           data_format=data_format,
+    #           trainable=trainable))
+    #   self.initial_conv_relu_max_pool.append(
+    #       IdentityLayer(name='initial_max_pool', trainable=trainable))
 
     self.block_groups = []
     # TODO(srbs): This impl is different from the original one in the case where
@@ -681,8 +833,8 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
       trainable = True
 
   def call(self, inputs, training):
-    for layer in self.initial_conv_relu_max_pool:
-      inputs = layer(inputs, training=training)
+    # for layer in self.initial_conv_relu_max_pool:
+      # inputs = layer(inputs, training=training)
 
     for i, layer in enumerate(self.block_groups):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
@@ -738,6 +890,54 @@ def resnet(resnet_depth,
 
   params = model_params[resnet_depth]
   return Resnet(
+      params['block'],
+      params['layers'],
+      width_multiplier,
+      cifar_stem=cifar_stem,
+      dropblock_keep_probs=dropblock_keep_probs,
+      dropblock_size=dropblock_size,
+      data_format=data_format)
+
+
+def resnet_1(resnet_depth,
+           width_multiplier,
+           cifar_stem=False,
+           data_format='channels_last',
+           dropblock_keep_probs=None,
+           dropblock_size=None):
+  """Returns the ResNet model for a given size and number of output classes."""
+  model_params = {
+      18: {
+          'block': ResidualBlock,
+          'layers': [2, 2, 2, 2]
+      },
+      34: {
+          'block': ResidualBlock,
+          'layers': [3, 4, 6, 3]
+      },
+      50: {
+          'block': BottleneckBlock,
+          'layers': [3, 4, 6, 3]
+      },
+      101: {
+          'block': BottleneckBlock,
+          'layers': [3, 4, 23, 3]
+      },
+      152: {
+          'block': BottleneckBlock,
+          'layers': [3, 8, 36, 3]
+      },
+      200: {
+          'block': BottleneckBlock,
+          'layers': [3, 24, 36, 3]
+      }
+  }
+
+  if resnet_depth not in model_params:
+    raise ValueError('Not a valid resnet_depth:', resnet_depth)
+
+  params = model_params[resnet_depth]
+  return Resnet_Module_1(
       params['block'],
       params['layers'],
       width_multiplier,
