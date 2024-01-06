@@ -50,7 +50,7 @@ flags.DEFINE_float(
     'Batch norm decay parameter.')
 
 flags.DEFINE_integer(
-    'train_batch_size', 128,
+    'train_batch_size', 512,
     'Batch size for training.')
 
 flags.DEFINE_integer(
