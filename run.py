@@ -100,7 +100,7 @@ flags.DEFINE_bool(
     'improve performance.')
 
 flags.DEFINE_enum(
-    'mode', 'train', ['train', 'eval', 'train_then_eval'],
+    'mode', 'train_then_eval', ['train', 'eval', 'train_then_eval'],
     'Whether to perform training or evaluation.')
 
 flags.DEFINE_enum(
