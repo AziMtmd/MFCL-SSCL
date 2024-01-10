@@ -7,7 +7,7 @@ pip install tf_slim
 #pip install tfds-nightly
 python3 run.py
 import os
-folder_path = './azi'
+folder_path = '/azi'
 for root, dirs, files in os.walk(folder_path):
   for file in files:
     if file.startswith('ckpt'):
