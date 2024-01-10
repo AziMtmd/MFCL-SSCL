@@ -765,7 +765,7 @@ def main(argv):
       logging.info('Training 1 complete...')
 
   # baray Module dovom
-    FLAGS.train_epochs=40
+    FLAGS.train_epochs=30
     train_steps_2 = model_lib.get_train_steps(num_train_examples) 
     epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
 
@@ -809,7 +809,7 @@ def main(argv):
       logging.info('Training 2 complete...')
 
   # baray Module sevom
-    FLAGS.train_epochs=100
+    FLAGS.train_epochs=90
     train_steps_3 = model_lib.get_train_steps(num_train_examples) 
     epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
 
