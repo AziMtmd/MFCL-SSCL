@@ -28,11 +28,13 @@ import model as model_lib
 import objective as obj_lib
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets as tfds
+import keras
 
-
+import tf_slim as slim
+from tensorflow.python.profiler.model_analyzer import profile
+from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
-
 
 flags.DEFINE_float(
     'learning_rate', 0.3,
@@ -56,12 +58,24 @@ flags.DEFINE_integer(
     'train_batch_size', 512,
     'Batch size for training.')
 
+flags.DEFINE_integer(
+    'train_batch_size_1', 64,
+    'Batch size for training.')
+
+flags.DEFINE_bool(
+    'module1_train', True,
+    'If the network is ready to make the representations for the next step')
+
+flags.DEFINE_bool(
+    'module2_train', True,
+    'If the network is ready to make the representations for the next step')
+
 flags.DEFINE_string(
     'train_split', 'train',
     'Split for training.')
 
 flags.DEFINE_integer(
-    'train_epochs', 100,
+    'train_epochs', 10,
     'Number of epochs to train for.')
 
 flags.DEFINE_integer(
@@ -259,6 +273,22 @@ def get_salient_tensors_dict(include_projection_head):
         'projection_head/proj_head_output:0')
   return result
 
+def flops(mrd):
+  session = tf.compat.v1.Session()
+  graph = tf.compat.v1.get_default_graph()
+  with graph.as_default():
+    with session.as_default():
+      # model = keras.applications.EfficientNetV2B0(weights=None, input_tensor=tf.compat.v1.placeholder('float32', shape=(1, 224, 224, 3)))
+      run_meta = tf.compat.v1.RunMetadata()
+      opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
+      # Optional: save printed results to file
+      # flops_log_path = os.path.join(tempfile.gettempdir(), 'tf_flops_log.txt')
+      # opts['output'] = 'file:outfile={}'.format(flops_log_path)
+      # We use the Keras session graph in the call to the profiler.
+      flops = tf.compat.v1.profiler.profile(graph=graph,
+                                            run_meta=run_meta, cmd='op', options=opts)
+  # tf.compat.v1.reset_default_graph()
+  return flops.total_float_ops
 
 def build_saved_model(model, include_projection_head=True):
   """Returns a tf.Module for saving to SavedModel."""
@@ -345,7 +375,7 @@ def json_serializable(val):
     return False
 
 
-def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
+def perform_evaluation(model, model_1, model_2, builder, eval_steps, ckpt, strategy, topology):
   """Perform evaluation."""
   if FLAGS.train_mode == 'pretrain' and not FLAGS.lineareval_while_pretraining:
     logging.info('Skipping eval during pretraining without linear eval.')
@@ -363,8 +393,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     label_top_5_accuracy = tf.keras.metrics.TopKCategoricalAccuracy(
         5, 'eval/label_top_5_accuracy')
     all_metrics = [
-        regularization_loss, label_top_1_accuracy, label_top_5_accuracy
-    ]
+        regularization_loss, label_top_1_accuracy, label_top_5_accuracy]
 
     # Restore checkpoint.
     logging.info('Restoring from %s', ckpt)
@@ -375,7 +404,9 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     logging.info('Performing eval at step %d', global_step.numpy())
 
   def single_step(features, labels):
-    _, supervised_head_outputs = model(features, training=False)
+    rep = model_1(features, training=False)
+    rep2 = model_2(rep, training=False)
+    _, supervised_head_outputs = model(rep2, training=False)
     assert supervised_head_outputs is not None
     outputs = supervised_head_outputs
     l = labels['labels']
@@ -427,16 +458,13 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     json.dump(serializable_flags, f)
 
   # Export as SavedModel for finetuning and inference.
-  save(model, global_step=result['global_step'])
+  # save(model, global_step=result['global_step'])
 
   return result
 
-
 def _restore_latest_or_from_pretrain(checkpoint_manager):
   """Restores the latest ckpt if training already.
-
   Or restores from FLAGS.checkpoint if in finetune mode.
-
   Args:
     checkpoint_manager: tf.traiin.CheckpointManager.
   """
@@ -462,99 +490,178 @@ def _restore_latest_or_from_pretrain(checkpoint_manager):
       for x in output_layer_parameters:
         x.assign(tf.zeros_like(x))
 
+def model_summary(mdl):
+  model_vars = mdl.trainable_variables
+  slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-
 
   builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
   builder.download_and_prepare()
   num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
   num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
   num_classes = builder.info.features['label'].num_classes
-
-  train_steps = model_lib.get_train_steps(num_train_examples)
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-  epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
+  
+# baray Module aval
+  train_steps_1 = model_lib.get_train_steps(num_train_examples) 
+  epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size_1))
 
-  logging.info('# train examples: %d', num_train_examples)
-  logging.info('# train_steps: %d', train_steps)
-  logging.info('# eval examples: %d', num_eval_examples)
-  logging.info('# eval steps: %d', eval_steps)
+  logging.info('# train examples M1: %d', num_train_examples)
+  logging.info('# train_steps M1: %d', train_steps_1)
+  logging.info('# eval examples M1: %d', num_eval_examples)
+  logging.info('# eval steps M1: %d', eval_steps)
 
-  checkpoint_steps = (
-      FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
+  checkpoint_steps_1 = (
+      FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_1))
 
   topology = None
-  if FLAGS.use_tpu:
-    if FLAGS.tpu_name:
-      cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
-          FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
-    else:
-      cluster = tf.distribute.cluster_resolver.TPUClusterResolver(FLAGS.master)
-    tf.config.experimental_connect_to_cluster(cluster)
-    topology = tf.tpu.experimental.initialize_tpu_system(cluster)
-    logging.info('Topology:')
-    logging.info('num_tasks: %d', topology.num_tasks)
-    logging.info('num_tpus_per_task: %d', topology.num_tpus_per_task)
-    strategy = tf.distribute.TPUStrategy(cluster)
-
-  else:
-    # For (multiple) GPUs.
-    strategy = tf.distribute.MirroredStrategy()
-    logging.info('Running using MirroredStrategy on %d replicas',
-                 strategy.num_replicas_in_sync)
+  strategy = tf.distribute.MirroredStrategy()
+  logging.info('Running using MirroredStrategy on %d replicas',
+                strategy.num_replicas_in_sync)
 
   with strategy.scope():
+    model_2 = model_lib.Module_2(num_classes)
+    model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
     for ckpt in tf.train.checkpoints_iterator(
         FLAGS.model_dir, min_interval_secs=15):
-      result = perform_evaluation(model, builder, eval_steps, ckpt, strategy,
-                                  topology)
-      if result['global_step'] >= train_steps:
+      result = perform_evaluation(model, model_1, model_2, builder, eval_steps, ckpt, strategy,
+                                  topology)#******************
+      if result['global_step'] >= train_steps_3:
         logging.info('Eval complete. Exiting...')
         return
   else:
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size,
+      ds1 = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size_1,
                                               True, strategy, topology)
 
+      ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size,
+                                              True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate,
-                                                     num_train_examples)
-      optimizer = model_lib.build_optimizer(learning_rate)
+                                                    num_train_examples)
+      FLAGS.optimizer='adam'
+      optimizer_1 = model_lib.build_optimizer(0.001)
 
+      FLAGS.optimizer='lars'
+      optimizer = model_lib.build_optimizer(learning_rate)
+      optimizer_2 = model_lib.build_optimizer(learning_rate)
+      
       # Build metrics.
       all_metrics = []  # For summaries.
       weight_decay_metric = tf.keras.metrics.Mean('train/weight_decay')
       total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
       all_metrics.extend([weight_decay_metric, total_loss_metric])
       if FLAGS.train_mode == 'pretrain':
+        unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
+        unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
         contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
         contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
-        contrast_entropy_metric = tf.keras.metrics.Mean(
-            'train/contrast_entropy')
+        contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
         all_metrics.extend([
-            contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric
-        ])
+            unsupervised_loss_metric, unsupervised_acc_metric,
+            contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric])
       if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
         supervised_loss_metric = tf.keras.metrics.Mean('train/supervised_loss')
         supervised_acc_metric = tf.keras.metrics.Mean('train/supervised_acc')
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
       # Restore checkpoint if available.
+      checkpoint_manager_1 = try_restore_from_checkpoint(
+          model_1, optimizer_1.iterations, optimizer_1)
+
+      checkpoint_manager_2 = try_restore_from_checkpoint(
+          model_2, optimizer_2.iterations, optimizer_2)
+
       checkpoint_manager = try_restore_from_checkpoint(
           model, optimizer.iterations, optimizer)
 
-    steps_per_loop = checkpoint_steps
+    def single_step_1(features, labels):
+      with tf.GradientTape() as tape:
+        should_record = tf.equal((optimizer_1.iterations + 1) % steps_per_loop_1, 0)
+        with tf.summary.record_if(should_record):
+          tf.summary.image(
+              'image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
+        hdd = model_1(features, training=True)
+        loss = None
+        num_transforms = features.shape[3] // 3
+        num_transforms = tf.repeat(3, num_transforms)
+        features_list = tf.split(features, num_or_size_splits=num_transforms, axis=-1)
+        fea = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
+
+        if hdd is not None:
+          outputs = hdd          
+          unsup_loss = obj_lib.add_usupervised_loss(fea, outputs)
+          if loss is None:
+            loss = unsup_loss
+          else:
+            loss += unsup_loss          
+          metrics.update_finetune_metrics_train(unsupervised_loss_metric,
+                                                unsupervised_acc_metric, loss,
+                                                fea, outputs)
+        total_loss_metric.update_state(loss)
+        loss = loss / strategy.num_replicas_in_sync
+        print('for first module')
+        model_summary(model_1)
+        logging.info('Trainable variables:')
+        for var in model_1.trainable_variables:
+          logging.info(var.name)
+        grads = tape.gradient(loss, model_1.trainable_variables)
+        optimizer_1.apply_gradients(zip(grads, model_1.trainable_variables))
+    
+    def single_step_2(features, labels):
+      FLAGS.module2_train=True
+      FLAGS.module1_train=False
+      with tf.GradientTape() as tape:
+        should_record = tf.equal((optimizer_2.iterations + 1) % steps_per_loop_2, 0)
+        with tf.summary.record_if(should_record):
+          tf.summary.image(
+              'image', features[:, :, :, :3], step=optimizer_2.iterations + 1)
+        rep = model_1(features, training=False)
+        projection_head_outputs, supervised_head_outputs = model_2(
+            rep, training=True)
+        model_summary(model_2)
+        loss = None
+        if projection_head_outputs is not None:
+          outputs = projection_head_outputs
+          con_loss, logits_con, labels_con = obj_lib.add_contrastive_loss(
+              outputs,
+              hidden_norm=FLAGS.hidden_norm,
+              temperature=FLAGS.temperature,
+              strategy=strategy)
+          if loss is None:
+            loss = con_loss
+          else:
+            loss += con_loss
+          metrics.update_pretrain_metrics_train(contrast_loss_metric,
+                                                contrast_acc_metric,
+                                                contrast_entropy_metric,
+                                                con_loss, logits_con,
+                                                labels_con)
+        weight_decay = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
+        weight_decay_metric.update_state(weight_decay)
+        loss += weight_decay
+        total_loss_metric.update_state(loss)
+        loss = loss / strategy.num_replicas_in_sync
+        print('for second module')
+        model_summary(model_2)
+        logging.info('Trainable variables:')
+        for var in model_2.trainable_variables:
+          logging.info(var.name)
+        grads = tape.gradient(loss, model_2.trainable_variables)
+        optimizer_2.apply_gradients(zip(grads, model_2.trainable_variables))
 
     def single_step(features, labels):
+      FLAGS.module1_train=False
+      FLAGS.module2_train=False
       with tf.GradientTape() as tape:
         # Log summaries on the last step of the training loop to match
         # logging frequency of other scalar summaries.
@@ -569,13 +676,16 @@ def main(argv):
         #    those of scalar summaries.
         # 4. We intentionally run the summary op before the actual model
         #    training so that it can run in parallel.
-        should_record = tf.equal((optimizer.iterations + 1) % steps_per_loop, 0)
+        should_record = tf.equal((optimizer.iterations + 1) % steps_per_loop_3, 0)
         with tf.summary.record_if(should_record):
           # Only log augmented images for the first tower.
           tf.summary.image(
               'image', features[:, :, :, :3], step=optimizer.iterations + 1)
+
+        rep = model_1(features, training=False)
+        b = model_2(rep, training=False)
         projection_head_outputs, supervised_head_outputs = model(
-            features, training=True)
+            rep, training=True)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -615,11 +725,101 @@ def main(argv):
         # replicas so we divide the loss by the number of replicas so that the
         # mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
+        print('for third module')
+        model_summary(model)
         logging.info('Trainable variables:')
         for var in model.trainable_variables:
           logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
+    
+    steps_per_loop_1 = checkpoint_steps_1
+    with strategy.scope():
+
+      @tf.function
+      def train_multiple_steps(iterator):
+        for _ in tf.range(steps_per_loop_1):
+          with tf.name_scope(''):
+            images, labels = next(iterator)
+            features, labels = images, {'labels': labels}
+            strategy.run(single_step_1, (features, labels))
+        # flops(model_1)
+
+      global_step = optimizer_1.iterations
+      cur_step_1 = global_step.numpy()
+      iterator = iter(ds1)
+      while cur_step_1 < train_steps_1:
+        with summary_writer.as_default():
+          train_multiple_steps(iterator)
+          cur_step_1 = global_step.numpy()
+          checkpoint_manager_1.save(cur_step_1)
+          logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
+          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          tf.summary.scalar(
+              'learning_rate',
+              learning_rate(tf.cast(global_step, dtype=tf.float32)),
+              global_step)
+          summary_writer.flush()
+        for metric in all_metrics:
+          metric.reset_states()
+      logging.info('Training 1 complete...')
+
+  # baray Module dovom
+    FLAGS.train_epochs=40
+    train_steps_2 = model_lib.get_train_steps(num_train_examples) 
+    epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
+
+    logging.info('# train examples M2: %d', num_train_examples)
+    logging.info('# train_steps M2: %d', train_steps_2)
+    logging.info('# eval examples M2: %d', num_eval_examples)
+    logging.info('# eval steps M2: %d', eval_steps)
+
+    checkpoint_steps_2 = (
+        FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_2))
+    
+    steps_per_loop_2 = checkpoint_steps_2
+
+    with strategy.scope():
+      @tf.function
+      def train_multiple_steps(iterator):
+        for _ in tf.range(steps_per_loop_2):
+          with tf.name_scope(''):
+            images, labels = next(iterator)
+            features, labels = images, {'labels': labels}
+            strategy.run(single_step_2, (features, labels))
+        # flops(model_2)
+
+      global_step = optimizer_2.iterations
+      cur_step_2 = global_step.numpy()
+      iterator = iter(ds1)
+      while cur_step_2 < train_steps_2:
+        with summary_writer.as_default():
+          train_multiple_steps(iterator)
+          cur_step_2 = global_step.numpy()
+          checkpoint_manager_2.save(cur_step_2)
+          logging.info('Completed: %d / %d steps', cur_step_2, train_steps_2)
+          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_2)
+          tf.summary.scalar(
+              'learning_rate',
+              learning_rate(tf.cast(global_step, dtype=tf.float32)),
+              global_step)
+          summary_writer.flush()
+        for metric in all_metrics:
+          metric.reset_states()
+      logging.info('Training 2 complete...')
+
+  # baray Module sevom
+    FLAGS.train_epochs=100
+    train_steps_3 = model_lib.get_train_steps(num_train_examples) 
+    epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
+
+    logging.info('# train examples M3: %d', num_train_examples)
+    logging.info('# train_steps M3: %d', train_steps_3)
+
+    checkpoint_steps_3 = (
+        FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))
+    
+    steps_per_loop_3 = checkpoint_steps_3
 
     with strategy.scope():
 
@@ -627,7 +827,7 @@ def main(argv):
       def train_multiple_steps(iterator):
         # `tf.range` is needed so that this runs in a `tf.while_loop` and is
         # not unrolled.
-        for _ in tf.range(steps_per_loop):
+        for _ in tf.range(steps_per_loop_3):
           # Drop the "while" prefix created by tf.while_loop which otherwise
           # gets prefixed to every variable name. This does not affect training
           # but does affect the checkpoint conversion script.
@@ -636,19 +836,20 @@ def main(argv):
             images, labels = next(iterator)
             features, labels = images, {'labels': labels}
             strategy.run(single_step, (features, labels))
+      # flops(model)
 
       global_step = optimizer.iterations
-      cur_step = global_step.numpy()
+      cur_step_3 = global_step.numpy()
       iterator = iter(ds)
-      while cur_step < train_steps:
+      while cur_step_3 < train_steps_3:
         # Calls to tf.summary.xyz lookup the summary writer resource which is
         # set by the summary writer's context manager.
         with summary_writer.as_default():
           train_multiple_steps(iterator)
-          cur_step = global_step.numpy()
-          checkpoint_manager.save(cur_step)
-          logging.info('Completed: %d / %d steps', cur_step, train_steps)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+          cur_step_3 = global_step.numpy()
+          checkpoint_manager.save(cur_step_3)
+          logging.info('Completed: %d / %d steps', cur_step_3, train_steps_3)
+          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
           tf.summary.scalar(
               'learning_rate',
               learning_rate(tf.cast(global_step, dtype=tf.float32)),
@@ -656,13 +857,12 @@ def main(argv):
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
-      logging.info('Training complete...')
+      logging.info('Training 3 complete...')
 
     if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(model, builder, eval_steps,
-                         checkpoint_manager.latest_checkpoint, strategy,
-                         topology)
-
+      perform_evaluation(model, model_1, model_2, builder, eval_steps,
+                        checkpoint_manager.latest_checkpoint, strategy,
+                        topology)#*************
 
 if __name__ == '__main__':
   tf.compat.v1.enable_v2_behavior()
