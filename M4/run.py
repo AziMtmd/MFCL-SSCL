@@ -362,6 +362,7 @@ def main(argv):
         logging.info('Eval complete. Exiting...')
         return
   else:
+    print(FLAGS)
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
