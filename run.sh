@@ -55,6 +55,13 @@ python3 M1/run.py --train_epochs=110
 python3 pakkon.py
 python3 M1/run.py --train_epochs=90 --train_split=train[:95%]
 
+
+python3 pakkon.py
+python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=30 --m4_epoch=100
+python3 pakkon.py
+python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=40 --m4_epoch=100
+
+
 echo "Ending of the script";
 
 cat run.sh
