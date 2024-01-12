@@ -38,19 +38,19 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
 
-flags.DEFINE_bool('module1_train', True, 'Training the first module')
+# flags.DEFINE_bool('module1_train', True, 'Training the first module')
 
-flags.DEFINE_bool('module2_train', True, 'Training the second module')
+# flags.DEFINE_bool('module2_train', True, 'Training the second module')
 
 flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m2_epoch', 3, 'Number of epochs to train for.')
+# flags.DEFINE_integer('m2_epoch', 3, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m3_epoch', 1, 'Number of epochs to train for.')
+# flags.DEFINE_integer('m3_epoch', 1, 'Number of epochs to train for.')
 
-flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 
@@ -330,7 +330,6 @@ def main(argv):
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
 
 # baray Module aval
-  FLAGS.train_batch_size=64
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -358,7 +357,6 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds1 = data_lib.build_distributed_dataset(builder, 64, True, strategy, topology)
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
@@ -454,7 +452,7 @@ def main(argv):
     
 
   # baray Module sevom
-    FLAGS.train_epochs=FLAGS.m3_epoch;FLAGS.train_batch_size=kept
+    FLAGS.train_batch_size=kept
     train_steps_3 = model_lib.get_train_steps(num_train_examples) 
     epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
     logging.info('# epoch_steps M3: %d', epoch_steps_3)
@@ -490,7 +488,7 @@ def main(argv):
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
-      logging.info('Training 3 complete...')
+      logging.info('Training 1 complete...')
 
     if FLAGS.mode == 'train_then_eval':
       perform_evaluation(model, builder, eval_steps,
