@@ -6,7 +6,7 @@ pip install tf_slim
 #pip install tensorflow-datasets
 #pip install tfds-nightly
 python3 pakkon.py
-python3 run.py
+python3 M3/run.py
 
 echo "Ending of the script";
 
