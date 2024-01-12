@@ -47,13 +47,13 @@ python3 pakkon.py
 python3 M3/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=90 --temperature=0.3
 
 python3 pakkon.py
-python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=30 --m4_epoch=100
+python3 M1/run.py --train_epochs=100
 python3 pakkon.py
-python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=20 --m4_epoch=100
+python3 M1/run.py --train_epochs=90
 python3 pakkon.py
-python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=40 --m4_epoch=100
+python3 M1/run.py --train_epochs=110
 python3 pakkon.py
-python3 M4/run.py --train_epochs=10 --m2_epoch=20 --m3_epoch=20 --m4_epoch=120
+python3 M1/run.py --train_epochs=90 --train_split=train[:95%]
 
 echo "Ending of the script";
 
