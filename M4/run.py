@@ -38,7 +38,7 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
 
 flags.DEFINE_bool('module1_train', True, 'Training the first module')
 
@@ -46,15 +46,15 @@ flags.DEFINE_bool('module2_train', True, 'Training the second module')
 
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 10, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m2_epoch', 2, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 20, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m3_epoch', 3, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 30, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m4_epoch', 4, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
 
-flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 
