@@ -62,7 +62,7 @@ flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.')
 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
-flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate per batch size of 256.')
+flags.DEFINE_float('learning_rate', 0.5, 'Initial learning rate per batch size of 256.')
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
@@ -92,7 +92,7 @@ flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
 flags.DEFINE_string('eval_name', None,'Name for eval.')
 flags.DEFINE_integer('keep_checkpoint_max', 5,'Maximum number of checkpoints to keep.')
 flags.DEFINE_integer('keep_hub_module_max', 1,'Maximum number of Hub modules to keep.')
-flags.DEFINE_float('temperature', 0.1,'Temperature parameter for contrastive loss.')
+flags.DEFINE_float('temperature', 0.3,'Temperature parameter for contrastive loss.')
 flags.DEFINE_boolean('hidden_norm', True,'Temperature parameter for contrastive loss.')
 flags.DEFINE_enum('proj_head_mode', 'nonlinear', ['none', 'linear', 'nonlinear'],'How the head projection is done.')
 flags.DEFINE_integer('ft_proj_selector', 0,'Which layer of the projection head to use during fine-tuning. '
