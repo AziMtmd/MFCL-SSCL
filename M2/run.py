@@ -38,7 +38,7 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
 
 flags.DEFINE_bool('module1_train', True, 'Training the first module')
 
