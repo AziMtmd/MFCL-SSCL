@@ -16,6 +16,24 @@ python3 pakkon.py
 python3 M1/run.py --train_epochs=100 --learning_rate=0.5 --temperature=0.3
 python3 pakkon.py
 python3 M1/run.py --train_epochs=100 --learning_rate=0.5 --temperature=0.4
+python3 pakkon.py
+python3 M1/run.py --train_epochs=100 --learning_rate=0.7 --temperature=0.3
+
+
+python3 pakkon.py
+python3 M2/run.py --train_epochs=100 --m2_epochs=5 --learning_rate=0.5 --temperature=0.3
+python3 pakkon.py
+python3 M2/run.py --train_epochs=100 --m2_epochs=15 --learning_rate=0.7 --temperature=0.3
+
+
+python3 pakkon.py
+python3 M1/run.py --train_epochs=100 --learning_rate=0.6 --temperature=0.3
+python3 pakkon.py
+python3 M1/run.py --train_epochs=100 --learning_rate=0.6 --temperature=0.4
+python3 pakkon.py
+python3 M1/run.py --train_epochs=100 --learning_rate=0.5 --temperature=0.3
+python3 pakkon.py
+python3 M1/run.py --train_epochs=100 --learning_rate=0.5 --temperature=0.4
 
 
 
