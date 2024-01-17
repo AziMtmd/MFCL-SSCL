@@ -62,7 +62,7 @@ flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.')
 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
-flags.DEFINE_float('learning_rate', 1.5 'Initial learning rate per batch size of 256.')
+flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
