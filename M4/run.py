@@ -464,7 +464,6 @@ def main(argv):
     logging.info('# train_steps M3: %d', train_steps_3)
     checkpoint_steps_3 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))    
     steps_per_loop_3 = checkpoint_steps_3
-    train_steps_3=3
     for tek in range(train_steps_3):
       avg=[]
       for m in range(FLAGS.numofclients):
@@ -474,7 +473,7 @@ def main(argv):
           # @tf.function
           def train_multiple_steps(iterator):
             # `tf.range` is needed so that this runs in a `tf.while_loop` and is not unrolled.
-            for _ in tf.range(1):
+            for _ in tf.range(782):
               # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name. 
               # This does not affect training but does affect the checkpoint conversion script. TODO(b/161712658): Remove this.
               with tf.name_scope(''):
