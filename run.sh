@@ -8,7 +8,13 @@ pip install model-profiler
 #pip install tfds-nightly
 
 python3 pakkon.py
-python3 M4/run.py 
+python3 M4/run.py --dataset=cifar10
+
+python3 pakkon.py
+python3 M4/run.py --dataset=cifar100
+
+
+dataset
 
 echo "Ending of the script";
 
