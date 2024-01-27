@@ -8,13 +8,13 @@ pip install model-profiler
 #pip install tfds-nightly
 
 python3 pakkon.py
-python3 FedSimCLR/run.py --dataset='cifar10' --image_size=32 --evel_split='test'
+python3 FedSimCLR/run.py --dataset='cifar10' --image_size=32 --eval_split='test'
 
 python3 pakkon.py
-python3 FedSimCLR/run.py --dataset='cifar100' --image_size=32 --evel_split='test'
+python3 FedSimCLR/run.py --dataset='cifar100' --image_size=32 --eval_split='test'
 
 python3 pakkon.py
-python3 FedSimCLR/run.py --dataset='imagenet_resized/64x64' --image_size=64 --evel_split='validation'
+python3 FedSimCLR/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_split='validation'
 
 echo "Ending of the script";
 
