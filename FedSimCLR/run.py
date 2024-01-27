@@ -39,7 +39,7 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 52, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
 
 flags.DEFINE_integer('numofclients', 10, 'Number of epochs to train for.')
 
