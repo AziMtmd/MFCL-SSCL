@@ -39,15 +39,16 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 64, 'Batch size for training.')
 
 flags.DEFINE_integer('numofclients', 10, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 2, 'Number of epochs to train for.')
 
-flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
+flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
 
-flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
+# flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
+flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 
@@ -348,27 +349,27 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds=[]
       FLAGS.train_split='train[0:5000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))
+      dsc0=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       FLAGS.train_split='train[5000:10000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))
+      dsc1=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       FLAGS.train_split='train[10000:15000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))
+      dsc2=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       FLAGS.train_split='train[15000:20000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))  
+      dsc3=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)  
       FLAGS.train_split='train[20000:25000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))  
+      dsc4=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)  
       FLAGS.train_split='train[25000:30000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))  
+      dsc5=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)  
       FLAGS.train_split='train[30000:35000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))
+      dsc6=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       FLAGS.train_split='train[35000:40000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))  
+      dsc7=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)  
       FLAGS.train_split='train[40000:45000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))   
+      dsc8=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)   
       FLAGS.train_split='train[45000:50000]'
-      ds.append(data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology))  
+      dsc9=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)  
+
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
       # Build LR schedule and optimizer.
       for m in range(FLAGS.numofclients):
@@ -469,7 +470,27 @@ def main(argv):
     for tek in range(train_steps_3):
       avg=[]
       for m in range(FLAGS.numofclients):
-        iterator = iter(ds[m])
+        if m==0:
+          iterator = iter(dsc0)
+        if m==1:
+          iterator = iter(dsc1)
+        if m==2:
+          iterator = iter(dsc2)
+        if m==3:
+          iterator = iter(dsc3)
+        if m==4:
+          iterator = iter(dsc4)
+        if m==5:
+          iterator = iter(dsc5)
+        if m==6:
+          iterator = iter(dsc6)
+        if m==7:
+          iterator = iter(dsc7)
+        if m==8:
+          iterator = iter(dsc8)
+        if m==9:
+          iterator = iter(dsc9)
+
         with strategy.scope():
           @tf.function
           def train_multiple_steps(iterator):
