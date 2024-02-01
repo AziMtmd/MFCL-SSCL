@@ -47,8 +47,8 @@ flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
 
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
-flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
-#flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
+# flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
+flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 
@@ -535,13 +535,14 @@ def main(argv):
           for metric in all_metrics:
             metric.reset_states()
         # logging.info('Training 1 complete...')
-        avg.append(model.get_weights())    
+        avg=model.get_weights()  
       for m in range(FLAGS.numofclients):
         if m==0:
-          fer=avg[0]
+          fer=avg
         else:
-          fer=numpy.add(fer,avg[m])
-      for lr in range(len(avg[0])):
+          for rr in range(len(avg)):
+            fer[rr]=tf.add(avg[rr],fer[rr])
+      for lr in range(len(avg)):
         fer[lr]=(1/FLAGS.numofclients)*fer[lr]
       
       model_0.set_weights(fer);model_1.set_weights(fer);
