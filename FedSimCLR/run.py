@@ -47,8 +47,8 @@ flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
 
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
-flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
-#flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
+# flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
+flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 
@@ -153,11 +153,11 @@ def build_saved_model(model, include_projection_head=True):
   return module
 
 
-def save(model, global_step):
+def save(m, model, global_step):
   """Export as SavedModel for finetuning and inference."""
   saved_model = build_saved_model(model)
   export_dir = os.path.join(FLAGS.model_dir, 'saved_model')
-  checkpoint_export_dir = os.path.join(export_dir, str(global_step))
+  checkpoint_export_dir = os.path.join(export_dir, str(global_step)+str(m))
   if tf.io.gfile.exists(checkpoint_export_dir):
     tf.io.gfile.rmtree(checkpoint_export_dir)
   tf.saved_model.save(saved_model, checkpoint_export_dir)
@@ -176,8 +176,11 @@ def save(model, global_step):
 def try_restore_from_checkpoint(model, global_step, optimizer):
   """Restores the latest ckpt if it exists, otherwise check FLAGS.checkpoint."""
   checkpoint = tf.train.Checkpoint(model=model, global_step=global_step, optimizer=optimizer)
-  checkpoint_manager = tf.train.CheckpointManager(checkpoint,directory=FLAGS.model_dir,max_to_keep=FLAGS.keep_checkpoint_max)
+  checkpoint_manager = tf.train.CheckpointManager(checkpoint,directory=FLAGS.model_dir,
+  max_to_keep=FLAGS.keep_checkpoint_max)
   latest_ckpt = checkpoint_manager.latest_checkpoint
+  # print('latest_ckpt', latest_ckpt)
+
   if latest_ckpt:
     # Restore model weights, global step, optimizer states
     logging.info('Restoring from latest checkpoint: %s', latest_ckpt)
@@ -196,7 +199,6 @@ def try_restore_from_checkpoint(model, global_step, optimizer):
         x.assign(tf.zeros_like(x))
   return checkpoint_manager
 
-
 def json_serializable(val):
   try:
     json.dumps(val)
@@ -205,13 +207,13 @@ def json_serializable(val):
     return False
 
 
-def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
+def perform_evaluation(ds2, model, builder, eval_steps, ckpt, strategy, topology):
   """Perform evaluation."""
   if FLAGS.train_mode == 'pretrain' and not FLAGS.lineareval_while_pretraining:
     logging.info('Skipping eval during pretraining without linear eval.')
     return
   # Build input pipeline.
-  ds2 = data_lib.build_distributed_dataset(builder, FLAGS.eval_batch_size, False, strategy, topology)
+  #ds2 = data_lib.build_distributed_dataset(builder, FLAGS.eval_batch_size, False, strategy, topology)
   summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
   # Build metrics.
   with strategy.scope():
@@ -275,7 +277,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     json.dump(serializable_flags, f)
 
   # Export as SavedModel for finetuning and inference.
-  # save(model, global_step=result['global_step'])
+  # save(m, model, global_step=result['global_step'])
 
   return result
 
@@ -330,14 +332,16 @@ def main(argv):
   logging.info('# epoch_steps M1: %d', epoch_steps_1)
   logging.info('# eval examples M1: %d', num_eval_examples)
   logging.info('# eval steps M1: %d', eval_steps)
-  checkpoint_steps_1 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_1))
   topology = None
   strategy = tf.distribute.MirroredStrategy()
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
-  model=[]; optimizer=[]; checkpoint_manager=[]
+
   with strategy.scope():
-    for m in range(FLAGS.numofclients):
-      model.append(model_lib.Model(num_classes))
+    model_0=model_lib.Model(num_classes); model_1=model_lib.Model(num_classes)
+    model_2=model_lib.Model(num_classes); model_3=model_lib.Model(num_classes)
+    model_4=model_lib.Model(num_classes); model_5=model_lib.Model(num_classes)
+    model_6=model_lib.Model(num_classes); model_7=model_lib.Model(num_classes)
+    model_8=model_lib.Model(num_classes); model_9=model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
     for ckpt in tf.train.checkpoints_iterator(FLAGS.model_dir, min_interval_secs=15):
@@ -349,6 +353,7 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
+      ds2 = data_lib.build_distributed_dataset(builder, FLAGS.eval_batch_size, False, strategy, topology)
       FLAGS.train_split='train[0:5000]'
       dsc0=data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       FLAGS.train_split='train[5000:10000]'
@@ -372,8 +377,11 @@ def main(argv):
 
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
       # Build LR schedule and optimizer.
-      for m in range(FLAGS.numofclients):
-        optimizer.append(model_lib.build_optimizer(learning_rate))
+      optimizer_0=model_lib.build_optimizer(learning_rate); optimizer_1=model_lib.build_optimizer(learning_rate)
+      optimizer_2=model_lib.build_optimizer(learning_rate); optimizer_3=model_lib.build_optimizer(learning_rate)
+      optimizer_4=model_lib.build_optimizer(learning_rate); optimizer_5=model_lib.build_optimizer(learning_rate)
+      optimizer_6=model_lib.build_optimizer(learning_rate); optimizer_7=model_lib.build_optimizer(learning_rate)
+      optimizer_8=model_lib.build_optimizer(learning_rate); optimizer_9=model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
@@ -393,11 +401,18 @@ def main(argv):
         supervised_acc_metric = tf.keras.metrics.Mean('train/supervised_acc')
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
-      for m in range(FLAGS.numofclients):
-        checkpoint_manager.append(try_restore_from_checkpoint(model[m], optimizer[m].iterations, optimizer[m]))
-    
+      checkpoint_manager_0=try_restore_from_checkpoint(model_0, optimizer_0.iterations, optimizer_0)
+      checkpoint_manager_1=try_restore_from_checkpoint(model_1, optimizer_1.iterations, optimizer_1)
+      checkpoint_manager_2=try_restore_from_checkpoint(model_2, optimizer_2.iterations, optimizer_2)
+      checkpoint_manager_3=try_restore_from_checkpoint(model_3, optimizer_3.iterations, optimizer_3)
+      checkpoint_manager_4=try_restore_from_checkpoint(model_4, optimizer_4.iterations, optimizer_4)
+      checkpoint_manager_5=try_restore_from_checkpoint(model_5, optimizer_5.iterations, optimizer_5)
+      checkpoint_manager_6=try_restore_from_checkpoint(model_6, optimizer_6.iterations, optimizer_6)
+      checkpoint_manager_7=try_restore_from_checkpoint(model_7, optimizer_7.iterations, optimizer_7)
+      checkpoint_manager_8=try_restore_from_checkpoint(model_8, optimizer_8.iterations, optimizer_8)
+      checkpoint_manager_9=try_restore_from_checkpoint(model_9, optimizer_9.iterations, optimizer_9)  
 
-    def single_step(features, labels, m):
+    def single_step(features, labels):
       with tf.GradientTape() as tape:
         # Log summaries on the last step of the training loop to match
         # logging frequency of other scalar summaries.
@@ -412,14 +427,14 @@ def main(argv):
         #    those of scalar summaries.
         # 4. We intentionally run the summary op before the actual model
         #    training so that it can run in parallel.
-        should_record = tf.equal((optimizer[m].iterations + 1) % steps_per_loop_3, 0)
+        should_record = tf.equal((optimizer.iterations + 1) % steps_per_loop_3, 0)
         with tf.summary.record_if(should_record):
           # Only log augmented images for the first tower.
-          tf.summary.image('image', features[:, :, :, :3], step=optimizer[m].iterations + 1)
+          tf.summary.image('image', features[:, :, :, :3], step=optimizer.iterations + 1)
 
         # rep = model_1(features, training=False)
 
-        projection_head_outputs, supervised_head_outputs = model[m](features, training=True)
+        projection_head_outputs, supervised_head_outputs = model(features, training=True)
         # flops(model)
         loss = None
         if projection_head_outputs is not None:
@@ -445,7 +460,7 @@ def main(argv):
           else:
             loss += sup_loss
           metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
-        weight_decay = model_lib.add_weight_decay(model[m], adjust_per_optimizer=True)
+        weight_decay = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
@@ -457,39 +472,40 @@ def main(argv):
         # logging.info('Trainable variables:')
         # for var in model[m].trainable_variables:
         #   logging.info(var.name)
-        grads = tape.gradient(loss, model[m].trainable_variables)
-        optimizer[m].apply_gradients(zip(grads, model[m].trainable_variables))
+        grads = tape.gradient(loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
     
   # baray Module sevom
     train_steps_3 = model_lib.get_train_steps(num_train_examples) 
+    # train_steps_3 = model_lib.get_train_steps(5000) 
     epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
     logging.info('# epoch_steps M3: %d', epoch_steps_3)
     logging.info('# train_steps M3: %d', train_steps_3)
     checkpoint_steps_3 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))    
     steps_per_loop_3 = checkpoint_steps_3
-    for tek in range(train_steps_3):
+    for tek in range(2):
       avg=[]
       for m in range(FLAGS.numofclients):
         if m==0:
-          iterator = iter(dsc0)
+          iterator = iter(dsc0);model=model_0; optimizer=optimizer_0; checkpoint_manager=checkpoint_manager_0
         if m==1:
-          iterator = iter(dsc1)
+          iterator = iter(dsc1);model=model_1; optimizer=optimizer_1; checkpoint_manager=checkpoint_manager_1
         if m==2:
-          iterator = iter(dsc2)
+          iterator = iter(dsc2);model=model_2; optimizer=optimizer_2; checkpoint_manager=checkpoint_manager_2
         if m==3:
-          iterator = iter(dsc3)
+          iterator = iter(dsc3);model=model_3; optimizer=optimizer_3; checkpoint_manager=checkpoint_manager_3
         if m==4:
-          iterator = iter(dsc4)
+          iterator = iter(dsc4);model=model_4; optimizer=optimizer_4; checkpoint_manager=checkpoint_manager_4
         if m==5:
-          iterator = iter(dsc5)
+          iterator = iter(dsc5);model=model_5; optimizer=optimizer_5; checkpoint_manager=checkpoint_manager_5
         if m==6:
-          iterator = iter(dsc6)
+          iterator = iter(dsc6);model=model_6; optimizer=optimizer_6; checkpoint_manager=checkpoint_manager_6
         if m==7:
-          iterator = iter(dsc7)
+          iterator = iter(dsc7);model=model_7; optimizer=optimizer_7; checkpoint_manager=checkpoint_manager_7
         if m==8:
-          iterator = iter(dsc8)
+          iterator = iter(dsc8);model=model_8; optimizer=optimizer_8; checkpoint_manager=checkpoint_manager_8
         if m==9:
-          iterator = iter(dsc9)
+          iterator = iter(dsc9);model=model_9; optimizer=optimizer_9; checkpoint_manager=checkpoint_manager_9
 
         with strategy.scope():
           @tf.function
@@ -501,9 +517,9 @@ def main(argv):
               with tf.name_scope(''):
                 images, labels = next(iterator)
                 features, labels = images, {'labels': labels}
-                strategy.run(single_step, (features, labels, m))
+                strategy.run(single_step, (features, labels))
           
-          global_step = optimizer[m].iterations
+          global_step = optimizer.iterations
           cur_step_3 = global_step.numpy()        
           # while cur_step_3 < train_steps_3:
           # Calls to tf.summary.xyz lookup the summary writer resource which is
@@ -511,7 +527,7 @@ def main(argv):
           with summary_writer.as_default():
             train_multiple_steps(iterator)
             cur_step_3 = global_step.numpy()
-            checkpoint_manager[m].save(cur_step_3)
+            checkpoint_manager.save(cur_step_3+m)
             logging.info('Completed: %d / %d steps', cur_step_3, train_steps_3)
             metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
             tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
@@ -519,7 +535,7 @@ def main(argv):
           for metric in all_metrics:
             metric.reset_states()
         # logging.info('Training 1 complete...')
-        avg.append(model[m].get_weights())    
+        avg.append(model.get_weights())    
       for m in range(FLAGS.numofclients):
         if m==0:
           fer=avg[0]
@@ -527,13 +543,41 @@ def main(argv):
           fer=numpy.add(fer,avg[m])
       for lr in range(len(avg[0])):
         fer[lr]=(1/FLAGS.numofclients)*fer[lr]
-      for m in range(FLAGS.numofclients):
-        model[m].set_weights(fer)
-
-  for m in range(FLAGS.numofclients):
-    if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(model[m], builder, eval_steps,
-                        checkpoint_manager[m].latest_checkpoint, strategy,topology)
+      
+      model_0.set_weights(fer);model_1.set_weights(fer);
+      model_2.set_weights(fer);model_3.set_weights(fer);model_4.set_weights(fer);model_5.set_weights(fer);
+      model_6.set_weights(fer);model_7.set_weights(fer); model_8.set_weights(fer);model_9.set_weights(fer)
+    for m in range(FLAGS.numofclients):
+        if m==0:
+          iterator = iter(dsc0);model=model_0; optimizer=optimizer_0; checkpoint_manager=checkpoint_manager_0
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==1:
+          iterator = iter(dsc1);model=model_1; optimizer=optimizer_1; checkpoint_manager=checkpoint_manager_1
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==2:
+          iterator = iter(dsc2);model=model_2; optimizer=optimizer_2; checkpoint_manager=checkpoint_manager_2
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==3:
+          iterator = iter(dsc3);model=model_3; optimizer=optimizer_3; checkpoint_manager=checkpoint_manager_3
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==4:
+          iterator = iter(dsc4);model=model_4; optimizer=optimizer_4; checkpoint_manager=checkpoint_manager_4
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==5:
+          iterator = iter(dsc5);model=model_5; optimizer=optimizer_5; checkpoint_manager=checkpoint_manager_5
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==6:
+          iterator = iter(dsc6);model=model_6; optimizer=optimizer_6; checkpoint_manager=checkpoint_manager_6
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==7:
+          iterator = iter(dsc7);model=model_7; optimizer=optimizer_7; checkpoint_manager=checkpoint_manager_7
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==8:
+          iterator = iter(dsc8);model=model_8; optimizer=optimizer_8; checkpoint_manager=checkpoint_manager_8
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
+        if m==9:
+          iterator = iter(dsc9);model=model_9; optimizer=optimizer_9; checkpoint_manager=checkpoint_manager_9
+          perform_evaluation(ds2, model, builder, eval_steps,checkpoint_manager.latest_checkpoint, strategy,topology)
 
 if __name__ == '__main__':
   tf.compat.v1.enable_v2_behavior()
