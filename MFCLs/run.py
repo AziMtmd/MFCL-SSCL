@@ -46,7 +46,7 @@ flags.DEFINE_integer('train_epochs', 20, 'Number of epochs to train for.')
 
 flags.DEFINE_integer('numofclients', 10, 'Number of epochs to train for.')
 
-flags.DEFINE_integer('m2_epoch', 50, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 150, 'Number of epochs to train for.')
 
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
@@ -500,7 +500,7 @@ def main(argv):
     checkpoint_steps_3 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))    
     steps_per_loop_3 = checkpoint_steps_3
 
-    for tek in range(1):
+    for tek in range(130):
       avg=[]
       for m in range(FLAGS.numofclients):
         if m==0:
@@ -528,7 +528,7 @@ def main(argv):
           @tf.function
           def train_multiple_steps(iterator):
             # `tf.range` is needed so that this runs in a `tf.while_loop` and is not unrolled.
-            for _ in tf.range(50):
+            for _ in tf.range(10):
               # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name. 
               # This does not affect training but does affect the checkpoint conversion script. TODO(b/161712658): Remove this.
               with tf.name_scope(''):
