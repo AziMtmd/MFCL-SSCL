@@ -421,15 +421,15 @@ def main(argv):
             strategy.run(single_step, (features, labels))
       
       global_step = optimizer.iterations
-      cur_step_3 = global_step.numpy()
+      cur_step_1 = global_step.numpy()
       iterator = iter(ds)
-      while cur_step_3 < train_steps_1:
+      while cur_step_1 < train_steps_1:
         with summary_writer.as_default():
           train_multiple_steps(iterator)
-          cur_step_3 = global_step.numpy()
-          checkpoint_manager.save(cur_step_3)
-          logging.info('Completed: %d / %d steps', cur_step_3, train_steps_1)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
+          cur_step_1= global_step.numpy()
+          checkpoint_manager.save(cur_step_1)
+          logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
+          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
           if FLAGS.mode == 'train_then_eval':
