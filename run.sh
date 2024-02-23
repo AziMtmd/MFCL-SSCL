@@ -35,6 +35,11 @@ python3 M2/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_spli
 python3 pakkon.py
 python3 M3/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_split='validation'
 
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test'
+python3 pakkon.py
+python3 M4/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_split='validation'
+
 echo "Ending of the script";
 
 cat run.sh
