@@ -895,6 +895,3 @@ def resnet_2(resnet_depth,width_multiplier,cifar_stem=True,data_format='channels
   return Resnet_Module_2(params['block'],params['layers'],width_multiplier,cifar_stem=cifar_stem,
       dropblock_keep_probs=dropblock_keep_probs,dropblock_size=dropblock_size,data_format=data_format)
 
-
-
-
