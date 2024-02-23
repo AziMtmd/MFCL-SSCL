@@ -79,7 +79,7 @@ flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
 flags.DEFINE_string('eval_name', None,'Name for eval.')
 flags.DEFINE_integer('keep_checkpoint_max', 5,'Maximum number of checkpoints to keep.')
 flags.DEFINE_integer('keep_hub_module_max', 1,'Maximum number of Hub modules to keep.')
-flags.DEFINE_float('temperature', 0.5,'Temperature parameter for contrastive loss.')
+flags.DEFINE_float('temperature', 0.3,'Temperature parameter for contrastive loss.')
 flags.DEFINE_boolean('hidden_norm', True,'Temperature parameter for contrastive loss.')
 flags.DEFINE_enum('proj_head_mode', 'nonlinear', ['none', 'linear', 'nonlinear'],'How the head projection is done.')
 flags.DEFINE_integer('ft_proj_selector', 0,'Which layer of the projection head to use during fine-tuning. '
