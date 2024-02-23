@@ -351,5 +351,3 @@ class Module_2(tf.keras.models.Model):
       return projection_head_outputs, supervised_head_inputs
     else:
       return hiddens, conv      
-
-
