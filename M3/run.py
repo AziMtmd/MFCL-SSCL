@@ -389,7 +389,7 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
         
         hdd, fea = model_1(features, training=True)
-        # flops(model_1)
+        flops(model_1)
         loss = None
         if hdd is not None:
           outputs = hdd          
@@ -418,7 +418,7 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_2.iterations + 1)
         rep = model_1(features, training=False)
         projection_head_outputs, supervised_head_outputs = model_2(rep, training=True)
-        # flops(model_2)
+        flops(model_2)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -454,7 +454,7 @@ def main(argv):
         rep = model_1(features, training=False)
         _,b = model_2(rep, training=False)
         projection_head_outputs, supervised_head_outputs = model_3(b, training=True)
-        # flops(model)
+        flops(model_3)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
