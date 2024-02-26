@@ -1,4 +1,6 @@
 #script1.sh
+#/azi/downloads/manual. Create it and download/extract dataset artifacts in there using instructions.
+manual_dir should contain `ILSVRC2012_img_val.tar` file.
 clear
 echo "Starting shell script .."
 pip install tf_slim
