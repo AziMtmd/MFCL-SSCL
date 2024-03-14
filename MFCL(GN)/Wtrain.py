@@ -81,8 +81,8 @@ class autokhodamClass():
         dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))        
 
       if FLAGS.CPC==10:
-        x_n01=np.concatenate((X_train[(self.name*500):((self.name*500)+250)], X_train[((self.name*500)+250):(self.name+1)*500]), axis=0)
-        y_n01=np.concatenate((y_train[(self.name*500):((self.name*500)+250)], y_train[((self.name*500)+250):(self.name+1)*500]), axis=0)
+        x_n01=np.concatenate((X_train[(self.name*5000):((self.name*5000)+2500)], X_train[((self.name*5000)+2500):(self.name+1)*5000]), axis=0)
+        y_n01=np.concatenate((y_train[(self.name*5000):((self.name*5000)+2500)], y_train[((self.name*5000)+2500):(self.name+1)*5000]), axis=0)
         lol=len(y_n01)
         vay01=np.reshape(y_n01, (lol,))
         x_nn01, y_nn01 = shuffle(np.array(x_n01), np.array(vay01))
