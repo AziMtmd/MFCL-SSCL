@@ -341,7 +341,7 @@ class SE_Layer(tf.keras.layers.Layer):  # pylint: disable=invalid-name
     se_tensor = self.se_expand(tf.nn.relu(self.se_reduce(se_tensor)))
     return tf.sigmoid(se_tensor) * inputs
 
-
+    
 class ResidualBlock(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
   def __init__(self,
@@ -895,3 +895,7 @@ def resnet_2(resnet_depth,width_multiplier,cifar_stem=True,data_format='channels
   params = model_params[resnet_depth]
   return Resnet_Module_2(params['block'],params['layers'],width_multiplier,cifar_stem=cifar_stem,
       dropblock_keep_probs=dropblock_keep_probs,dropblock_size=dropblock_size,data_format=data_format)
+
+
+
+
