@@ -30,25 +30,22 @@ import tensorflow.compat.v2 as tf
 import tensorflow_datasets as tfds
 import keras
 import sys
-
 import tf_slim as slim
-# from model_profiler import model_profiler
 from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 512, 'Batch size for training.')
-flags.DEFINE_integer('train_epochs', 150, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
-#flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
-flags.DEFINE_string('dataset', 'imagenet_resized', 'Name of a dataset.')
+flags.DEFINE_integer('train_batch_size', 64, 'Batch size for training.')
+flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
 flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
-flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
+flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate per batch size of 256.')
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
@@ -78,7 +75,7 @@ flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
 flags.DEFINE_string('eval_name', None,'Name for eval.')
 flags.DEFINE_integer('keep_checkpoint_max', 5,'Maximum number of checkpoints to keep.')
 flags.DEFINE_integer('keep_hub_module_max', 1,'Maximum number of Hub modules to keep.')
-flags.DEFINE_float('temperature', 0.3,'Temperature parameter for contrastive loss.')
+flags.DEFINE_float('temperature', 0.1,'Temperature parameter for contrastive loss.')
 flags.DEFINE_boolean('hidden_norm', True,'Temperature parameter for contrastive loss.')
 flags.DEFINE_enum('proj_head_mode', 'nonlinear', ['none', 'linear', 'nonlinear'],'How the head projection is done.')
 flags.DEFINE_integer('ft_proj_selector', 0,'Which layer of the projection head to use during fine-tuning. '
@@ -112,15 +109,9 @@ def flops(mrd):
   graph = tf.compat.v1.get_default_graph()
   with graph.as_default():
     with session.as_default():
-      # model = keras.applications.EfficientNetV2B0(weights=None, input_tensor=tf.compat.v1.placeholder('float32', shape=(1, 224, 224, 3)))
       run_meta = tf.compat.v1.RunMetadata()
       opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
-      # Optional: save printed results to file
-      # flops_log_path = os.path.join(tempfile.gettempdir(), 'tf_flops_log.txt')
-      # opts['output'] = 'file:outfile={}'.format(flops_log_path)
-      # We use the Keras session graph in the call to the profiler.
       flops = tf.compat.v1.profiler.profile(graph=graph, run_meta=run_meta, cmd='op', options=opts)
-  # tf.compat.v1.reset_default_graph()
   return flops.total_float_ops
 
 
@@ -235,7 +226,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     iterator = iter(ds)
     for i in range(eval_steps):
       run_single_step(iterator)
-      # logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
+      logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
     logging.info('Finished eval for %s', ckpt)
 
   # Write summaries
@@ -265,8 +256,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     json.dump(serializable_flags, f)
 
   # Export as SavedModel for finetuning and inference.
-  # save(model, global_step=result['global_step'])
-
+  save(model, global_step=result['global_step'])
   return result
 
 def _restore_latest_or_from_pretrain(checkpoint_manager):
@@ -313,8 +303,9 @@ def main(argv):
   num_classes = builder.info.features['label'].num_classes
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-
-# baray Module aval
+  #***************
+  num_train_examples=5000
+  #***************
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -328,6 +319,8 @@ def main(argv):
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
 
   with strategy.scope():
+    # model_2 = model_lib.Module_2(num_classes)
+    # model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
@@ -343,7 +336,11 @@ def main(argv):
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
+      FLAGS.optimizer='adam'
+      optimizer_1 = model_lib.build_optimizer(0.001)
+      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
+      optimizer_2 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
@@ -351,27 +348,31 @@ def main(argv):
       total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
       all_metrics.extend([weight_decay_metric, total_loss_metric])
       if FLAGS.train_mode == 'pretrain':
-        unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
-        unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
+        # unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
+        # unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
         contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
         contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
         contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
-        all_metrics.extend([unsupervised_loss_metric, unsupervised_acc_metric,
-            contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric])
+        # all_metrics.extend([unsupervised_loss_metric, unsupervised_acc_metric,
+        all_metrics.extend([contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric])
       if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
         supervised_loss_metric = tf.keras.metrics.Mean('train/supervised_loss')
         supervised_acc_metric = tf.keras.metrics.Mean('train/supervised_acc')
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
+      # Restore checkpoint if available.
+      # checkpoint_manager_1 = try_restore_from_checkpoint(model_1, optimizer_1.iterations, optimizer_1)
+      # checkpoint_manager_2 = try_restore_from_checkpoint(model_2, optimizer_2.iterations, optimizer_2)
       checkpoint_manager = try_restore_from_checkpoint(model, optimizer.iterations, optimizer)
     
     def single_step(features, labels):
       with tf.GradientTape() as tape:
-        should_record = tf.equal((optimizer.iterations + 1) % steps_per_loop_1, 0)
+        should_record = tf.equal((optimizer.iterations + 1) % checkpoint_steps_1, 0)
         with tf.summary.record_if(should_record):
           # Only log augmented images for the first tower.
           tf.summary.image('image', features[:, :, :, :3], step=optimizer.iterations + 1)
 
+        # rep = model_1(features, training=False)
         projection_head_outputs, supervised_head_outputs = model(features, training=True)
         flops(model)
         loss = None
@@ -400,19 +401,23 @@ def main(argv):
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
+        # The default behavior of `apply_gradients` is to sum gradients from all
+        # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
-        # logging.info('Trainable variables:')
-        # for var in model.trainable_variables:
-        #   logging.info(var.name)
+        # print('****************************for the third module****************************')
+        # model_summary(model)
+        logging.info('Trainable variables:')
+        print('%%%%%%OUPUT%%%%%%')
+        for var in model.trainable_variables:
+          logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))    
- 
-    steps_per_loop_1 = checkpoint_steps_1
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+    
     with strategy.scope():
       @tf.function
       def train_multiple_steps(iterator):
         # `tf.range` is needed so that this runs in a `tf.while_loop` and is not unrolled.
-        for _ in tf.range(steps_per_loop_1):
+        for _ in tf.range(checkpoint_steps_1):
           # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name. 
           # This does not affect training but does affect the checkpoint conversion script. TODO(b/161712658): Remove this.
           with tf.name_scope(''):
@@ -424,28 +429,29 @@ def main(argv):
       cur_step_1 = global_step.numpy()
       iterator = iter(ds)
       while cur_step_1 < train_steps_1:
+        # Calls to tf.summary.xyz lookup the summary writer resource which is
+        # set by the summary writer's context manager.
         with summary_writer.as_default():
           train_multiple_steps(iterator)
-          cur_step_1= global_step.numpy()
+          cur_step_1 = global_step.numpy()
           checkpoint_manager.save(cur_step_1)
           logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
           metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
-          if FLAGS.mode == 'train_then_eval':
-            perform_evaluation(model, builder, eval_steps,
-                              checkpoint_manager.latest_checkpoint, strategy,topology)
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 1 complete...')
 
-    # if FLAGS.mode == 'train_then_eval':
-    #   perform_evaluation(model, builder, eval_steps,
-    #                     checkpoint_manager.latest_checkpoint, strategy,topology)
+    if FLAGS.mode == 'train_then_eval':
+      perform_evaluation(model, builder, eval_steps, checkpoint_manager.latest_checkpoint, strategy,topology)
 
 if __name__ == '__main__':
   tf.compat.v1.enable_v2_behavior()
   # For outside compilation of summaries on TPU.
   tf.config.set_soft_device_placement(True)
   app.run(main)
+
+
+
 
