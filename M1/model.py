@@ -280,14 +280,11 @@ class Model(tf.keras.models.Model):
                                                   FLAGS.image_size,
                                                   FLAGS.image_size)
     features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
-
     # Base network forward pass.
     hiddens = self.resnet_model(features, training=training)
-
     # Add heads.
     projection_head_outputs, supervised_head_inputs = self._projection_head(
         hiddens, training)
-
     if FLAGS.train_mode == 'finetune':
       supervised_head_outputs = self.supervised_head(supervised_head_inputs,
                                                      training)
@@ -351,3 +348,6 @@ class Module_2(tf.keras.models.Model):
       return projection_head_outputs, supervised_head_inputs
     else:
       return hiddens, conv      
+
+
+
