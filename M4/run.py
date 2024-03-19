@@ -36,16 +36,16 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('train_batch_size', 64, 'Batch size for training.')
+flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
 flags.DEFINE_bool('module1_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_integer('train_epochs', 20, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 20, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 20, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 20, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
@@ -53,7 +53,7 @@ flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
 flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
-flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate per batch size of 256.')
+flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
@@ -83,7 +83,7 @@ flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
 flags.DEFINE_string('eval_name', None,'Name for eval.')
 flags.DEFINE_integer('keep_checkpoint_max', 5,'Maximum number of checkpoints to keep.')
 flags.DEFINE_integer('keep_hub_module_max', 1,'Maximum number of Hub modules to keep.')
-flags.DEFINE_float('temperature', 0.1,'Temperature parameter for contrastive loss.')
+flags.DEFINE_float('temperature', 0.3,'Temperature parameter for contrastive loss.')
 flags.DEFINE_boolean('hidden_norm', True,'Temperature parameter for contrastive loss.')
 flags.DEFINE_enum('proj_head_mode', 'nonlinear', ['none', 'linear', 'nonlinear'],'How the head projection is done.')
 flags.DEFINE_integer('ft_proj_selector', 0,'Which layer of the projection head to use during fine-tuning. '
@@ -217,8 +217,8 @@ def perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps, ck
 
   def single_step(features, labels):
     rep = model_1(features, training=False)
-    _, rep2 = model_2(rep, training=False)
-    _, rep3 = model_3(rep2, training=False)
+    rep2 = model_2(rep, training=False)
+    rep3 = model_3(rep2, training=False)
     _, supervised_head_outputs = model(rep3, training=False)
     assert supervised_head_outputs is not None
     outputs = supervised_head_outputs
@@ -451,8 +451,8 @@ def main(argv):
         with tf.summary.record_if(should_record):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_3.iterations + 1)
         rep = model_1(features, training=False)
-        _,b = model_2(rep, training=False)
-        projection_head_outputs, supervised_head_outputs = model_3(rep, training=True)
+        b = model_2(rep, training=False)
+        projection_head_outputs, supervised_head_outputs = model_3(b, training=True)
         flops(model_3)
         loss = None
         if projection_head_outputs is not None:
@@ -489,8 +489,8 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer.iterations + 1)
 
         rep = model_1(features, training=False)
-        _,b = model_2(rep, training=False)
-        _,c = model_3(b, training=False)
+        b = model_2(rep, training=False)
+        c = model_3(b, training=False)
         projection_head_outputs, supervised_head_outputs = model(c, training=True)
         flops(model)
         loss = None
@@ -668,7 +668,3 @@ if __name__ == '__main__':
   # For outside compilation of summaries on TPU.
   tf.config.set_soft_device_placement(True)
   app.run(main)
-
-
-
-
