@@ -38,7 +38,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('train_batch_size', 64, 'Batch size for training.')
 flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
