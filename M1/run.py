@@ -447,6 +447,7 @@ def main(argv):
       perform_evaluation(model, builder, eval_steps, checkpoint_manager.latest_checkpoint, strategy,topology)
 
 if __name__ == '__main__':
+  print('Shoroo Barname')
   tf.compat.v1.enable_v2_behavior()
   # For outside compilation of summaries on TPU.
   tf.config.set_soft_device_placement(True)
