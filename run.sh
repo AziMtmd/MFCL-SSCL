@@ -11,6 +11,8 @@ pip install model-profiler
 
 
 python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
+python3 pakkon.py
 python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300 --m2_epoch=300 --m3_epoch=300 --m4_epoch=300
 python3 pakkon.py
 python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=350 --m2_epoch=350 --m3_epoch=350 --m4_epoch=350
