@@ -10,16 +10,25 @@ pip install model-profiler
 #pip install tfds-nightly
 
 python3 pakkon.py
-python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' 350
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=350
 python3 pakkon.py
-python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' 400
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400
 python3 pakkon.py
-python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' 450
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=450
 python3 pakkon.py
-python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' 500
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=500
+
 
 python3 pakkon.py
-python3 MFCLs/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_split='validation'
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=350
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=450
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=500
+
+
 python3 pakkon.py
 python3 M1/run.py --dataset='imagenet_resized/64x64' --image_size=64 --eval_split='validation'
 
