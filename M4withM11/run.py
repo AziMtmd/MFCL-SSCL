@@ -440,9 +440,9 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
-        # weight_decay = model_lib.add_weight_decay(model_11, adjust_per_optimizer=True)
-        # weight_decay_metric.update_state(weight_decay)
-        # loss += weight_decay
+        weight_decay = model_lib.add_weight_decay(model_11, adjust_per_optimizer=True)
+        weight_decay_metric.update_state(weight_decay)
+        loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the second module****************************')
@@ -543,7 +543,7 @@ def main(argv):
         b = model_2(rep1, training=False)
         c = model_3(b, training=False)
         projection_head_outputs, supervised_head_outputs = model(c, training=True)
-        flops(model)
+        #flops(model)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -574,8 +574,8 @@ def main(argv):
         # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the fourth module****************************')
-        for var in model.trainable_variables:
-          logging.info(var.name)
+       # for var in model.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
