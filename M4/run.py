@@ -41,10 +41,10 @@ flags.DEFINE_bool('module1_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 40, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 80, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
@@ -57,7 +57,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -491,7 +491,7 @@ def main(argv):
         b = model_2(rep, training=False)
         c = model_3(b, training=False)
         projection_head_outputs, supervised_head_outputs = model(c, training=True)
-        flops(model)
+        #flops(model)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -522,8 +522,8 @@ def main(argv):
         # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the fourth module****************************')
-        for var in model.trainable_variables:
-          logging.info(var.name)
+        #for var in model.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
