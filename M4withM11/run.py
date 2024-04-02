@@ -42,11 +42,11 @@ flags.DEFINE_bool('module11_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 120, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m11_epoch', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 40, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 40, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m11_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 80, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
@@ -59,7 +59,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -323,7 +323,7 @@ def main(argv):
 
   #M_1   
   print('For Module 1:') 
-  kept=FLAGS.train_batch_size; FLAGS.train_batch_size=64    
+  kept=FLAGS.train_batch_size; FLAGS.train_batch_size=128    
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -352,7 +352,7 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds1 = data_lib.build_distributed_dataset(builder, 64, True, strategy, topology)
+      # ds1 = data_lib.build_distributed_dataset(builder, 64, True, strategy, topology)
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
@@ -397,7 +397,7 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
         
         hdd, fea = model_1(features, training=True)
-        flops(model_1)
+        #flops(model_1)
         print('fea.shape', fea.shape)
         print('hdd.shape', hdd.shape)
         loss = None
@@ -413,9 +413,9 @@ def main(argv):
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the first module****************************')
-        logging.info('Trainable variables:')
-        for var in model_1.trainable_variables:
-          logging.info(var.name)
+        #logging.info('Trainable variables:')
+        #for var in model_1.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model_1.trainable_variables)
         optimizer_1.apply_gradients(zip(grads, model_1.trainable_variables))
 
@@ -428,7 +428,7 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_11.iterations + 1)
         rep = model_1(features, training=False)
         projection_head_outputs, supervised_head_outputs = model_11(rep, training=True)        
-        flops(model_11)
+        #flops(model_11)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -447,9 +447,9 @@ def main(argv):
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the second module****************************')
         # model_summary(model_11)
-        logging.info('Trainable variables:')
-        for var in model_11.trainable_variables:
-          logging.info(var.name)
+        #logging.info('Trainable variables:')
+        #for var in model_11.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model_11.trainable_variables)
         optimizer_11.apply_gradients(zip(grads, model_11.trainable_variables))
 
@@ -465,7 +465,7 @@ def main(argv):
         rep = model_1(features, training=False)
         rep2 = model_11(rep, training=False)
         projection_head_outputs, supervised_head_outputs = model_2(rep2, training=True)
-        flops(model_2)
+        #flops(model_2)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -484,9 +484,9 @@ def main(argv):
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the second module****************************')
         # model_summary(model_2)
-        logging.info('Trainable variables:')
-        for var in model_2.trainable_variables:
-          logging.info(var.name)
+        #logging.info('Trainable variables:')
+        #for var in model_2.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model_2.trainable_variables)
         optimizer_2.apply_gradients(zip(grads, model_2.trainable_variables))
 
@@ -502,7 +502,7 @@ def main(argv):
         rep2 = model_11(rep, training=False)
         rep3 = model_2(rep2, training=False)
         projection_head_outputs, supervised_head_outputs = model_3(rep3, training=True)
-        flops(model_3)
+        #flops(model_3)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -521,9 +521,9 @@ def main(argv):
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the third module****************************')
         # model_summary(model_3)
-        logging.info('Trainable variables:')
-        for var in model_3.trainable_variables:
-          logging.info(var.name)
+        #logging.info('Trainable variables:')
+        #for var in model_3.trainable_variables:
+         # logging.info(var.name)
         grads = tape.gradient(loss, model_3.trainable_variables)
         optimizer_3.apply_gradients(zip(grads, model_3.trainable_variables))
 
@@ -591,7 +591,7 @@ def main(argv):
 
       steps_per_loop_1 = checkpoint_steps_1
       print('steps_per_loop_1', steps_per_loop_1)
-      iterator = iter(ds1)
+      iterator = iter(ds)
       global_step = optimizer_1.iterations
       cur_step_1 = global_step.numpy()
       while cur_step_1 < train_steps_1:
