@@ -303,9 +303,7 @@ def main(argv):
   num_classes = builder.info.features['label'].num_classes
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-  #***************
-  num_train_examples=5000
-  #***************
+
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -406,10 +404,10 @@ def main(argv):
         loss = loss / strategy.num_replicas_in_sync
         # print('****************************for the third module****************************')
         # model_summary(model)
-        logging.info('Trainable variables:')
-        print('%%%%%%OUPUT%%%%%%')
-        for var in model.trainable_variables:
-          logging.info(var.name)
+        #logging.info('Trainable variables:')
+        #print('%%%%%%OUPUT%%%%%%')
+        #for var in model.trainable_variables:
+          #logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
     
