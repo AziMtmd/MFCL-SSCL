@@ -69,10 +69,10 @@ python3 M4withM11/run.py --dataset='cifar10' --image_size=32 --eval_split='test'
 #python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=450 --m2_epoch=450 --m3_epoch=450 --m4_epoch=500
 
 
-#python3 pakkon.py
-#python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100
-#python3 pakkon.py
-#python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200
+python3 pakkon.py
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100
+python3 pakkon.py
+python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200
 
 
 
