@@ -1,6 +1,6 @@
 #script1.sh
 #/azi/downloads/manual. Create it and download/extract dataset artifacts in there using instructions.
-manual_dir should contain `ILSVRC2012_img_val.tar` file.
+#manual_dir should contain `ILSVRC2012_img_val.tar` file.
 clear
 echo "Starting shell script .."
 pip install tf_slim
@@ -10,6 +10,7 @@ pip install model-profiler
 #pip install tfds-nightly
 pip install matplotlib
 pip install scikit-learn
+
 
 #python3 pakkon.py
 #python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100
