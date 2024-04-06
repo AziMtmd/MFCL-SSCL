@@ -20,6 +20,11 @@ pip install scikit-learn
 python3 pakkon.py
 python3 M1mahd/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100
 
+python3 pakkon.py
+python3 M4AllCont/run.py --resnet_depth=18 --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
+
+python3 pakkon.py
+python3 M4AllCont/run.py --resnet_depth=50 --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
 
 
 
