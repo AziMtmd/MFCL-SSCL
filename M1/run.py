@@ -37,12 +37,12 @@ from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
-flags.DEFINE_integer('train_epochs', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
-flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
+flags.DEFINE_integer('resnet_depth', 50,'Depth of ResNet.') 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
 flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
