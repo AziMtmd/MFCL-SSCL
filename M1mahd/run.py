@@ -13,12 +13,13 @@
 # See the License for the specific simclr governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""The main training pipeline.""" 
+"""The main training pipeline."""
 
 import json
 import math
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 
 from absl import app
@@ -35,17 +36,16 @@ import sys
 import tf_slim as slim
 from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
-import matplotlib.pyplot as plt
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
-flags.DEFINE_integer('train_epochs', 50, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
-flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
+flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.')
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
 flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
@@ -54,7 +54,7 @@ flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
 flags.DEFINE_string('train_split', 'train', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
-flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
+flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
 flags.DEFINE_integer('checkpoint_epochs', 1, 'Number of epochs between checkpoints/summaries.')
 flags.DEFINE_integer('checkpoint_steps', 0,'Number of steps between checkpoints/summaries. If provided, overrides checkpoint_epochs.')
@@ -89,6 +89,24 @@ flags.DEFINE_float('sk_ratio', 0.,'If it is bigger than 0, it will enable SK. Re
 flags.DEFINE_float('se_ratio', 0.,'If it is bigger than 0, it will enable SE.')
 flags.DEFINE_float('color_jitter_strength', 1.0,'The strength of color jittering.')
 flags.DEFINE_boolean('use_blur', True,'Whether or not to use Gaussian blur for augmentation during pretraining.')
+
+def normalize_image(img):
+    grads_norm = img[:,:,0]+ img[:,:,1]+ img[:,:,2]
+    grads_norm = (grads_norm - tf.reduce_min(grads_norm))/ (tf.reduce_max(grads_norm)- tf.reduce_min(grads_norm))
+    return grads_norm
+
+def plot_maps(i, img1, img2,vmin=0.3,vmax=0.7, mix_val=2):
+    f = plt.figure(figsize=(15,45))
+    plt.subplot(1,3,1)
+    plt.imshow(img1,vmin=vmin, vmax=vmax, cmap="ocean")
+    plt.axis("off")
+    plt.subplot(1,3,2)
+    plt.imshow(img2, cmap = "ocean")
+    plt.axis("off")
+    plt.subplot(1,3,3)
+    plt.imshow(img1*mix_val+img2/mix_val, cmap = "ocean" )
+    plt.axis("off")    
+    plt.savefig('/azi/nik'+str(i))
 
 
 def get_salient_tensors_dict(include_projection_head):
@@ -195,7 +213,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     logging.info('Skipping eval during pretraining without linear eval.')
     return
   # Build input pipeline.
-  ss1 = data_lib.build_distributed_dataset(dataset0, FLAGS.eval_batch_size, True, strategy, topology)
+  ds = data_lib.build_distributed_dataset(builder, FLAGS.eval_batch_size, False, strategy, topology)
   summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
   # Build metrics.
   with strategy.scope():
@@ -211,17 +229,25 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
     logging.info('Performing eval at step %d', global_step.numpy())
 
   def single_step(features, labels):
-    xer, _, cov = model(features, training=True)
-    # assert supervised_head_outputs is not None
-    # outputs = supervised_head_outputs
-    # l = labels['labels']
-    # metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
-    # reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
-    # regularization_loss.update_state(reg_loss)
-    print(cov[0].shape)
-    # plt.imshow(xer[0].numpy().reshape(32, 16))
-    plt.imsave('fzi.png', xer[0].numpy().reshape(16, 8))
+    plt.savefig('/azi/foo.png')
+    with tf.GradientTape() as saliency_tape:
+      saliency_tape.watch(features)
+      sp,supervised_head_outputs, msh = model(features, training=False)
+      saliency_tape.watch(msh)
+      log_prediction_proba = tf.math.log(tf.reduce_max(sp))
+      # print('log_prediction_proba.shape', log_prediction_proba.shape)
+      # print('log_prediction_proba', log_prediction_proba)
+    saliency = saliency_tape.gradient(sp, features)
+    # print('saliency', saliency.shape)
+    for i in range(10):
+      plot_maps(i, normalize_image(saliency[i]), normalize_image(features[i]))
 
+    assert supervised_head_outputs is not None
+    outputs = supervised_head_outputs
+    l = labels['labels']
+    metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
+    reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
+    regularization_loss.update_state(reg_loss)
 
   with strategy.scope():
     # @tf.function
@@ -230,7 +256,7 @@ def perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology):
       features, labels = images, {'labels': labels}
       strategy.run(single_step, (features, labels))
 
-    iterator = iter(ss1)
+    iterator = iter(ds)
     for i in range(eval_steps):
       run_single_step(iterator)
       logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
@@ -310,10 +336,8 @@ def main(argv):
   num_classes = builder.info.features['label'].num_classes
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-  #***************
-  num_train_examples=5000
-  #***************
-  train_steps_1 = model_lib.get_train_steps(num_train_examples) 
+
+  train_steps_1 = model_lib.get_train_steps(num_train_examples)
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
   logging.info('# train_steps M1: %d', train_steps_1)
@@ -326,8 +350,6 @@ def main(argv):
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
 
   with strategy.scope():
-    # model_2 = model_lib.Module_2(num_classes)
-    # model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
@@ -340,9 +362,7 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      # ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
-      ss=data_lib.build_distributed_dataset(dataset0, FLAGS.train_batch_size, True, strategy, topology)
-      
+      ds = data_lib.build_distributed_dataset(dataset0, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
       FLAGS.optimizer='adam'
@@ -350,19 +370,16 @@ def main(argv):
       FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
       optimizer_2 = model_lib.build_optimizer(learning_rate)
-      
+
       # Build metrics.
       all_metrics = []  # For summaries.
       weight_decay_metric = tf.keras.metrics.Mean('train/weight_decay')
       total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
       all_metrics.extend([weight_decay_metric, total_loss_metric])
       if FLAGS.train_mode == 'pretrain':
-        # unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
-        # unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
         contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
         contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
         contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
-        # all_metrics.extend([unsupervised_loss_metric, unsupervised_acc_metric,
         all_metrics.extend([contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric])
       if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
         supervised_loss_metric = tf.keras.metrics.Mean('train/supervised_loss')
@@ -370,10 +387,8 @@ def main(argv):
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
       # Restore checkpoint if available.
-      # checkpoint_manager_1 = try_restore_from_checkpoint(model_1, optimizer_1.iterations, optimizer_1)
-      # checkpoint_manager_2 = try_restore_from_checkpoint(model_2, optimizer_2.iterations, optimizer_2)
       checkpoint_manager = try_restore_from_checkpoint(model, optimizer.iterations, optimizer)
-    
+
     def single_step(features, labels):
       with tf.GradientTape() as tape:
         should_record = tf.equal((optimizer.iterations + 1) % checkpoint_steps_1, 0)
@@ -381,9 +396,8 @@ def main(argv):
           # Only log augmented images for the first tower.
           tf.summary.image('image', features[:, :, :, :3], step=optimizer.iterations + 1)
 
-        # rep = model_1(features, training=False)
-        projection_head_outputs, supervised_head_outputs, _ = model(features, training=True)
-        flops(model)
+        projection_head_outputs, supervised_head_outputs, msh = model(features, training=True)
+        tape.watch(features)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -395,17 +409,17 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,
                                                 contrast_entropy_metric,con_loss, logits_con,labels_con)
-        # if supervised_head_outputs is not None:
-        #   outputs = supervised_head_outputs
-        #   l = labels['labels']
-        #   if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
-        #     l = tf.concat([l, l], 0)
-        #   sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
-        #   if loss is None:
-        #     loss = sup_loss
-        #   else:
-        #     loss += sup_loss
-        #   metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
         weight_decay = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -413,30 +427,24 @@ def main(argv):
         # The default behavior of `apply_gradients` is to sum gradients from all
         # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
-        # print('****************************for the third module****************************')
-        # model_summary(model)
-        logging.info('Trainable variables:')
-        print('%%%%%%OUPUT%%%%%%')
-        for var in model.trainable_variables:
-          logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
-    
+
     with strategy.scope():
       @tf.function
       def train_multiple_steps(iterator):
         # `tf.range` is needed so that this runs in a `tf.while_loop` and is not unrolled.
         for _ in tf.range(checkpoint_steps_1):
-          # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name. 
+          # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name.
           # This does not affect training but does affect the checkpoint conversion script. TODO(b/161712658): Remove this.
           with tf.name_scope(''):
             images, labels = next(iterator)
             features, labels = images, {'labels': labels}
             strategy.run(single_step, (features, labels))
-      
+
       global_step = optimizer.iterations
       cur_step_1 = global_step.numpy()
-      iterator = iter(ss)
+      iterator = iter(ds)
       while cur_step_1 < train_steps_1:
         # Calls to tf.summary.xyz lookup the summary writer resource which is
         # set by the summary writer's context manager.
@@ -453,9 +461,10 @@ def main(argv):
       logging.info('Training 1 complete...')
 
     if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(model, builder, eval_steps, checkpoint_manager.latest_checkpoint, strategy,topology)
+      perform_evaluation(model, dataset2, eval_steps, checkpoint_manager.latest_checkpoint, strategy,topology)
 
 if __name__ == '__main__':
+
   (x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
   (x_train1, y_train1), (x_test1, y_test1) = keras.datasets.mnist.load_data()
   
@@ -465,180 +474,232 @@ if __name__ == '__main__':
   idx6 = (y_train == 6).reshape(x_train.shape[0]);idx7 = (y_train == 7).reshape(x_train.shape[0])
   idx8 = (y_train == 8).reshape(x_train.shape[0]);idx9 = (y_train == 9).reshape(x_train.shape[0])
 
-  idx00 = (y_train1 == 0).reshape(x_train1.shape[0]);idx11 = (y_train1 == 1).reshape(x_train1.shape[0])
-  idx22 = (y_train1 == 2).reshape(x_train1.shape[0]);idx33 = (y_train1 == 3).reshape(x_train1.shape[0])
-  idx44 = (y_train1 == 4).reshape(x_train1.shape[0]);idx55 = (y_train1 == 5).reshape(x_train1.shape[0])
-  idx66 = (y_train1 == 6).reshape(x_train1.shape[0]);idx77 = (y_train1 == 7).reshape(x_train1.shape[0])
-  idx88 = (y_train1 == 8).reshape(x_train1.shape[0]);idx99 = (y_train1 == 9).reshape(x_train1.shape[0])
+  jdx0 = (y_test == 0).reshape(x_test.shape[0]);jdx1 = (y_test == 1).reshape(x_test.shape[0])
+  jdx2 = (y_test == 2).reshape(x_test.shape[0]);jdx3 = (y_test == 3).reshape(x_test.shape[0])
+  jdx4 = (y_test == 4).reshape(x_test.shape[0]);jdx5 = (y_test == 5).reshape(x_test.shape[0])
+  jdx6 = (y_test == 6).reshape(x_test.shape[0]);jdx7 = (y_test == 7).reshape(x_test.shape[0])
+  jdx8 = (y_test == 8).reshape(x_test.shape[0]);jdx9 = (y_test == 9).reshape(x_test.shape[0])
 
   filtered_images0 = x_train[idx0]; filtered_images1 = x_train[idx1]; filtered_images2 = x_train[idx2]
   filtered_images3 = x_train[idx3]; filtered_images4 = x_train[idx4]; filtered_images5 = x_train[idx5]
   filtered_images6 = x_train[idx6]; filtered_images7 = x_train[idx7]; filtered_images8 = x_train[idx8]
   filtered_images9 = x_train[idx9]
 
+  filtered_lable0=y_train[idx0];filtered_lable1=y_train[idx1];filtered_lable2=y_train[idx2]
+  filtered_lable3=y_train[idx3];filtered_lable4=y_train[idx4];filtered_lable5=y_train[idx5]
+  filtered_lable6=y_train[idx6];filtered_lable7=y_train[idx7];filtered_lable8=y_train[idx8]
+  filtered_lable9=y_train[idx9]
+
+  test_images0 = x_test[jdx0]; test_images1 = x_test[jdx1]; test_images2 = x_test[jdx2]
+  test_images3 = x_test[jdx3]; test_images4 = x_test[jdx4]; test_images5 = x_test[jdx5]
+  test_images6 = x_test[jdx6]; test_images7 = x_test[jdx7]; test_images8 = x_test[jdx8]
+  test_images9 = x_test[jdx9]
+
+  test_lable0=y_test[jdx0];test_lable1=y_test[jdx1];test_lable2=y_test[jdx2]
+  test_lable3=y_test[jdx3];test_lable4=y_test[jdx4];test_lable5=y_test[jdx5]
+  test_lable6=y_test[jdx6];test_lable7=y_test[jdx7];test_lable8=y_test[jdx8]
+  test_lable9=y_test[jdx9]
+
+  idx00 = (y_train1 == 0).reshape(x_train1.shape[0]);idx11 = (y_train1 == 1).reshape(x_train1.shape[0])
+  idx22 = (y_train1 == 2).reshape(x_train1.shape[0]);idx33 = (y_train1 == 3).reshape(x_train1.shape[0])
+  idx44 = (y_train1 == 4).reshape(x_train1.shape[0]);idx55 = (y_train1 == 5).reshape(x_train1.shape[0])
+  idx66 = (y_train1 == 6).reshape(x_train1.shape[0]);idx77 = (y_train1 == 7).reshape(x_train1.shape[0])
+  idx88 = (y_train1 == 8).reshape(x_train1.shape[0]);idx99 = (y_train1 == 9).reshape(x_train1.shape[0])
+
+  jdx00 = (y_test1 == 0).reshape(x_test1.shape[0]);jdx11 = (y_test1 == 1).reshape(x_test1.shape[0])
+  jdx22 = (y_test1 == 2).reshape(x_test1.shape[0]);jdx33 = (y_test1 == 3).reshape(x_test1.shape[0])
+  jdx44 = (y_test1 == 4).reshape(x_test1.shape[0]);jdx55 = (y_test1 == 5).reshape(x_test1.shape[0])
+  jdx66 = (y_test1 == 6).reshape(x_test1.shape[0]);jdx77 = (y_test1 == 7).reshape(x_test1.shape[0])
+  jdx88 = (y_test1 == 8).reshape(x_test1.shape[0]);jdx99 = (y_test1 == 9).reshape(x_test1.shape[0])
+
   filtered_images00 = x_train1[idx00]; filtered_images11 = x_train1[idx11]; filtered_images22 = x_train1[idx22]
   filtered_images33 = x_train1[idx33]; filtered_images44 = x_train1[idx44]; filtered_images55 = x_train1[idx55]
   filtered_images66 = x_train1[idx66]; filtered_images77 = x_train1[idx77]; filtered_images88 = x_train1[idx88]
   filtered_images99 = x_train1[idx99]
 
-  jdx0 = (y_train == 0).reshape(y_train.shape[0]);jdx1 = (y_train == 1).reshape(y_train.shape[0])
-  jdx2 = (y_train == 2).reshape(y_train.shape[0]);jdx3 = (y_train == 3).reshape(y_train.shape[0])
-  jdx4 = (y_train == 4).reshape(y_train.shape[0]);jdx5 = (y_train == 5).reshape(y_train.shape[0])
-  jdx6 = (y_train == 6).reshape(y_train.shape[0]);jdx7 = (y_train == 7).reshape(y_train.shape[0])
-  jdx8 = (y_train == 8).reshape(y_train.shape[0]);jdx9 = (y_train == 9).reshape(y_train.shape[0])
+  # filtered_lable00=y_train1[idx00];filtered_lable11=y_train1[idx11];filtered_lable22=y_train1[idx22]
+  # filtered_lable33=y_train1[idx33];filtered_lable44=y_train1[idx44];filtered_lable55=y_train1[idx55]
+  # filtered_lable66=y_train1[idx66];filtered_lable77=y_train1[idx77];filtered_lable88=y_train1[idx88]
+  # filtered_lable99=y_train1[idx99]
 
-  jdx00 = (y_train1 == 0).reshape(y_train1.shape[0]);jdx11 = (y_train1 == 1).reshape(y_train1.shape[0])
-  jdx22 = (y_train1 == 2).reshape(y_train1.shape[0]);jdx33 = (y_train1 == 3).reshape(y_train1.shape[0])
-  jdx44 = (y_train1 == 4).reshape(y_train1.shape[0]);jdx55 = (y_train1 == 5).reshape(y_train1.shape[0])
-  jdx66 = (y_train1 == 6).reshape(y_train1.shape[0]);jdx77 = (y_train1 == 7).reshape(y_train1.shape[0])
-  jdx88 = (y_train1 == 8).reshape(y_train1.shape[0]);jdx99 = (y_train1 == 9).reshape(y_train1.shape[0])
+  test_images00 = x_test1[jdx00]; test_images11 = x_test1[jdx11]; test_images22 = x_test1[jdx22]
+  test_images33 = x_test1[jdx33]; test_images44 = x_test1[jdx44]; test_images55 = x_test1[jdx55]
+  test_images66 = x_test1[jdx66]; test_images77 = x_test1[jdx77]; test_images88 = x_test1[jdx88]
+  test_images99 = x_test1[jdx99]
 
-  filtered_lable0=y_train[jdx0];filtered_lable1=y_train[jdx1];filtered_lable2=y_train[jdx2]
-  filtered_lable3=y_train[jdx3];filtered_lable4=y_train[jdx4];filtered_lable5=y_train[jdx5]
-  filtered_lable6=y_train[jdx6];filtered_lable7=y_train[jdx7];filtered_lable8=y_train[jdx8]
-  filtered_lable9=y_train[jdx9]
-
-  filtered_lable00=y_train1[jdx00];filtered_lable11=y_train1[jdx11];filtered_lable22=y_train1[jdx22]
-  filtered_lable33=y_train1[jdx33];filtered_lable44=y_train1[jdx44];filtered_lable55=y_train1[jdx55]
-  filtered_lable66=y_train1[jdx66];filtered_lable77=y_train1[jdx77];filtered_lable88=y_train1[jdx88]
-  filtered_lable99=y_train1[jdx99]
-
-  lb0=np.zeros((5000, 2), np.uint8); lb1=np.zeros((5000, 2), np.uint8); lb2=np.zeros((5000, 2), np.uint8)
-  lb3=np.zeros((5000, 2), np.uint8); lb4=np.zeros((5000, 2), np.uint8); lb5=np.zeros((5000, 2), np.uint8)
-  lb6=np.zeros((5000, 2), np.uint8); lb7=np.zeros((5000, 2), np.uint8); lb8=np.zeros((5000, 2), np.uint8)
-  lb9=np.zeros((5000, 2), np.uint8)
-
-  height1=32; width1=32; ch1=3
+  # test_lable00=y_test[jdx00];test_lable11=y_test[jdx11];test_lable22=y_test[jdx22]
+  # test_lable33=y_test[jdx33];test_lable44=y_test[jdx44];test_lable55=y_test[jdx55]
+  # test_lable66=y_test[jdx66];test_lable77=y_test[jdx77];test_lable88=y_test[jdx88]
+  # test_lable99=y_test[jdx99]
+ 
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
   
-  im0=np.zeros((5000, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((5000, 32+28+10, width1, ch1), np.uint8)
-  im2=np.zeros((5000, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((5000, 32+28+10, width1, ch1), np.uint8)
-  im4=np.zeros((5000, 32+28+10, width1, ch1), np.uint8); im5=np.zeros((5000, 32+28+10, width1, ch1), np.uint8)
-  im6=np.zeros((5000, 32+28+10, width1, ch1), np.uint8); im7=np.zeros((5000, 32+28+10, width1, ch1), np.uint8)
-  im8=np.zeros((5000, 32+28+10, width1, ch1), np.uint8); im9=np.zeros((5000, 32+28+10, width1, ch1), np.uint8)
+  im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
+  im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
+  im4=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im5=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
+  im6=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im7=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
+  im8=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im9=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
 
-  height2=28; width2=28; m=0; abj=500
-  for j in range (0, abj):
-    lb0[j]=np.concatenate((filtered_lable0[j], filtered_lable0[j]), axis=0)
+  tm0=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm2=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm4=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm6=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm8=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+
+  for j in range (abj):
     for x in range(0, height2):
       for y in range(0, width2):
-          im0[j][x+height1, y]=filtered_images00[j][x, y]  
+        im0[j][x+height1, y]=filtered_images00[j][x, y] 
+        if abj<1000:
+          tm0[j][x+height1, y]=test_images00[j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im0[j][x, y, c]=filtered_images0[j][x, y, c]
-  print(lb0.shape)
-  print(lb0)
+          im0[j][x, y, c]=filtered_images0[j][x, y, c];
+          if abj<1000: 
+            tm0[j][x, y, c]=test_images0[j][x, y, c]
 
   for j in range (0, abj):
-    lb1[j]=np.concatenate((filtered_lable1[j], filtered_lable1[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im1[j][x+height1, y]=filtered_images11[j][x, y]
+        im1[j][x+height1, y]=filtered_images11[j][x, y]
+        if abj<1000:
+          tm1[j][x+height1, y]=test_images11[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im1[j][x, y, c]=filtered_images1[j][x, y, c]
+          im1[j][x, y, c]=filtered_images1[j][x, y, c]; 
+          if abj<1000:
+            tm1[j][x, y, c]=test_images1[j][x, y, c]
 
   for j in range (0, abj):
-    lb2[j]=np.concatenate((filtered_lable2[j], filtered_lable2[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im2[j][x+height1, y]=filtered_images22[j][x, y]
+        im2[j][x+height1, y]=filtered_images22[j][x, y]; 
+        if abj<1000:
+          tm2[j][x+height1, y]=test_images22[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im2[j][x, y, c]=filtered_images2[j][x, y, c]
+          im2[j][x, y, c]=filtered_images2[j][x, y, c]; 
+          if abj<1000:
+            tm2[j][x, y, c]=test_images2[j][x, y, c]
 
   for j in range (0, abj):
-    lb3[j]=np.concatenate((filtered_lable3[j], filtered_lable3[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im3[j][x+height1, y]=filtered_images33[j][x, y]
+        im3[j][x+height1, y]=filtered_images33[j][x, y]; 
+        if abj<1000:
+          tm3[j][x+height1, y]=test_images33[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im3[j][x, y, c]=filtered_images3[j][x, y, c]
+          im3[j][x, y, c]=filtered_images3[j][x, y, c]; 
+          if abj<1000:
+            tm3[j][x, y, c]=test_images3[j][x, y, c]
 
   for j in range (0, abj):
-    lb4[j]=np.concatenate((filtered_lable4[j], filtered_lable4[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im4[j][x+height1, y]=filtered_images44[j][x, y]
+        im4[j][x+height1, y]=filtered_images44[j][x, y]; 
+        if abj<1000:
+          tm4[j][x+height1, y]=test_images44[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im4[j][x, y, c]=filtered_images4[j][x, y, c]
+          im4[j][x, y, c]=filtered_images4[j][x, y, c]; 
+          if abj<1000:
+            tm4[j][x, y, c]=test_images4[j][x, y, c]
 
   for j in range (0, abj):
-    lb5[j]=np.concatenate((filtered_lable5[j], filtered_lable5[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im5[j][x+height1, y]=filtered_images55[j][x, y]
+        im5[j][x+height1, y]=filtered_images55[j][x, y]; 
+        if abj<1000:
+          tm5[j][x+height1, y]=test_images55[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im5[j][x, y, c]=filtered_images5[j][x, y, c]
+          im5[j][x, y, c]=filtered_images5[j][x, y, c]; 
+          if abj<1000:
+            tm5[j][x, y, c]=test_images5[j][x, y, c]
 
   for j in range (0, abj):
-    lb6[j]=np.concatenate((filtered_lable6[j], filtered_lable6[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im6[j][x+height1, y]=filtered_images66[j][x, y]
+        im6[j][x+height1, y]=filtered_images66[j][x, y]; 
+        if abj<1000:
+          tm6[j][x+height1, y]=test_images66[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im6[j][x, y, c]=filtered_images6[j][x, y, c]
+          im6[j][x, y, c]=filtered_images6[j][x, y, c]; 
+          if abj<1000:
+            tm6[j][x, y, c]=test_images6[j][x, y, c]
 
   for j in range (0, abj):
-    lb7[j]=np.concatenate((filtered_lable7[j], filtered_lable7[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im7[j][x+height1, y]=filtered_images77[j][x, y]
+        im7[j][x+height1, y]=filtered_images77[j][x, y]; 
+        if abj<1000:
+          tm7[j][x+height1, y]=test_images77[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im7[j][x, y, c]=filtered_images7[j][x, y, c]
+          im7[j][x, y, c]=filtered_images7[j][x, y, c]; 
+          if abj<1000:
+            tm7[j][x, y, c]=test_images7[j][x, y, c]
 
   for j in range (0, abj):
-    lb8[j]=np.concatenate((filtered_lable8[j], filtered_lable8[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im8[j][x+height1, y]=filtered_images88[j][x, y]
+        im8[j][x+height1, y]=filtered_images88[j][x, y]; 
+        if abj<1000:
+          tm8[j][x+height1, y]=test_images88[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im8[j][x, y, c]=filtered_images8[j][x, y, c]
+          im8[j][x, y, c]=filtered_images8[j][x, y, c]; 
+          if abj<1000:
+            tm8[j][x, y, c]=test_images8[j][x, y, c]
 
   for j in range (0, abj):
-    lb9[j]=np.concatenate((filtered_lable9[j], filtered_lable9[j]), axis=0)
     for x in range(0, height2):
       for y in range (0, width2):
-          im9[j][x+height1, y]=filtered_images99[j][x, y]
+        im9[j][x+height1, y]=filtered_images99[j][x, y]; 
+        if abj<1000:
+          tm9[j][x+height1, y]=test_images99[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im9[j][x, y, c]=filtered_images9[j][x, y, c]
+          im9[j][x, y, c]=filtered_images9[j][x, y, c]; 
+          if abj<1000:
+            tm9[j][x, y, c]=test_images9[j][x, y, c]
 
   big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
-  lbig=np.concatenate((lb0[0:abj], lb1[0:abj], lb2[0:abj], lb3[0:abj], lb4[0:abj], lb5[0:abj], lb6[0:abj], lb7[0:abj], lb8[0:abj], lb9[0:abj]), axis=0)
-  
-  # lol=len(lbig)
-  # print(lol)
-  # vay01=np.reshape(lbig, (lol*2,))
+  lbig=np.concatenate((filtered_lable0[0:abj], filtered_lable1[0:abj], filtered_lable2[0:abj], 
+              filtered_lable3[0:abj], filtered_lable4[0:abj], filtered_lable5[0:abj], 
+              filtered_lable6[0:abj], filtered_lable7[0:abj], filtered_lable8[0:abj], filtered_lable9[0:abj]), axis=0)
 
   x_nn01, y_nn01 = shuffle(np.array(big), np.array(lbig))
+  y_nn01=y_nn01.reshape(abj*10,)
   Mydatasetx01 = tf.data.Dataset.from_tensor_slices(x_nn01)
   Mydatasety01 = tf.data.Dataset.from_tensor_slices(y_nn01)
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
-  # plt.imshow(big[5008])
-  # plt.imsave('fzi.png', big[5008])
-  # print(lbig[5008])
+  big2=np.concatenate((tm0[0:abj], tm1[0:abj], tm2[0:abj], tm3[0:abj], tm4[0:abj], tm5[0:abj], tm6[0:abj], tm7[0:abj], 
+              tm8[0:abj], tm9[0:abj]), axis=0)
+  lbig2=np.concatenate((test_lable0[0:abj], test_lable1[0:abj], test_lable2[0:abj], 
+              test_lable3[0:abj], test_lable4[0:abj], test_lable5[0:abj], 
+              test_lable6[0:abj], test_lable7[0:abj], test_lable8[0:abj], test_lable9[0:abj]), axis=0)
+
+  x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
+  y_nn02=y_nn02.reshape(1000*10,)
+  Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
+  Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
+  dataset2 = tf.data.Dataset.zip((Mydatasetx02, Mydatasety02))
 
   tf.compat.v1.enable_v2_behavior()
   # For outside compilation of summaries on TPU.
   tf.config.set_soft_device_placement(True)
   app.run(main)
-
-
-
