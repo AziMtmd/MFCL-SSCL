@@ -8,7 +8,7 @@ pip install model-profiler
 #pip install tensorflow
 #pip install tensorflow-datasets
 #pip install tfds-nightly
-
+pip install matplotlib
 
 
 
