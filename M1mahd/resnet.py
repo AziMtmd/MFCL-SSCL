@@ -771,11 +771,11 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
   def call(self, inputs, training):
     for layer in self.initial_conv_relu_max_pool:
       inputs = layer(inputs, training=training)
+    moshkel=inputs
     for i, layer in enumerate(self.block_groups):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
         inputs = tf.stop_gradient(inputs)
       inputs = layer(inputs, training=training)
-    cov=inputs
     if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 4:
       inputs = tf.stop_gradient(inputs)
     if self.data_format == 'channels_last':
@@ -784,7 +784,7 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
       inputs = tf.reduce_mean(inputs, [2, 3])
 
     inputs = tf.identity(inputs, 'final_avg_pool')
-    return inputs, cov
+    return inputs, moshkel
 
 
 def resnet(resnet_depth,width_multiplier,cifar_stem=True, data_format='channels_last',
