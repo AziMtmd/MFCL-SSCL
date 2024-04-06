@@ -10,6 +10,18 @@ pip install model-profiler
 #pip install tfds-nightly
 
 python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=350 --m2_epoch=350 --m3_epoch=350 --m4_epoch=350
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400 --m2_epoch=400 --m3_epoch=400 --m4_epoch=400
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=450 --m2_epoch=450 --m3_epoch=450 --m4_epoch=450
+
+
+python3 pakkon.py
 python3 M4withM11/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m11_epoch=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
 python3 pakkon.py
 python3 M4withM11/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m11_epoch=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
@@ -21,16 +33,6 @@ python3 pakkon.py
 python3 M4withM11/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m11_epoch=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=250
 
 
-#python3 pakkon.py
-#python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
-#python3 pakkon.py
-#python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
-#python3 pakkon.py
-#python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=350 --m2_epoch=350 --m3_epoch=350 --m4_epoch=350
-#python3 pakkon.py
-#python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400 --m2_epoch=400 --m3_epoch=400 --m4_epoch=400
-#python3 pakkon.py
-#python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=450 --m2_epoch=450 --m3_epoch=450 --m4_epoch=450
 
 #python3 pakkon.py
 #python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100 --m2_epoch=100 --m3_epoch=100 --m4_epoch=100
