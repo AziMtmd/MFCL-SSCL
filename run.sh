@@ -9,8 +9,7 @@ pip install model-profiler
 #pip install tensorflow-datasets
 #pip install tfds-nightly
 pip install matplotlib
-
-
+pip install scikit-learn
 
 #python3 pakkon.py
 #python3 M1/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=100
