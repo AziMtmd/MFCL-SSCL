@@ -47,7 +47,8 @@ def build_input_fn(builder, global_batch_size, topology, is_training):
     logging.info('Per-replica batch size: %d', batch_size)
     preprocess_fn_pretrain = get_preprocess_fn(is_training, is_pretrain=True)
     preprocess_fn_finetune = get_preprocess_fn(is_training, is_pretrain=False)
-    num_classes = builder.info.features['label'].num_classes
+    # num_classes = builder.info.features['label'].num_classes
+    num_classes = 10
 
     def map_fn(image, label):
       """Produces multiple transformations of the same batch."""
@@ -62,17 +63,18 @@ def build_input_fn(builder, global_batch_size, topology, is_training):
       return image, label
 
     logging.info('num_input_pipelines: %d', input_context.num_input_pipelines)
-    dataset = builder.as_dataset(
-        split=FLAGS.train_split if is_training else FLAGS.eval_split,
-        shuffle_files=is_training,
-        as_supervised=True,
-        # Passing the input_context to TFDS makes TFDS read different parts
-        # of the dataset on different workers. We also adjust the interleave
-        # parameters to achieve better performance.
-        read_config=tfds.ReadConfig(
-            interleave_cycle_length=32,
-            interleave_block_length=1,
-            input_context=input_context))
+    dataset=builder
+    # dataset = builder.as_dataset(
+    #     split=FLAGS.train_split if is_training else FLAGS.eval_split,
+    #     shuffle_files=is_training,
+    #     as_supervised=True,
+    #     # Passing the input_context to TFDS makes TFDS read different parts
+    #     # of the dataset on different workers. We also adjust the interleave
+    #     # parameters to achieve better performance.
+    #     read_config=tfds.ReadConfig(
+    #         interleave_cycle_length=32,
+    #         interleave_block_length=1,
+    #         input_context=input_context))
     if FLAGS.cache_dataset:
       dataset = dataset.cache()
     if is_training:
@@ -108,7 +110,7 @@ def get_preprocess_fn(is_training, is_pretrain):
   color_jitter_strength = FLAGS.color_jitter_strength if is_pretrain else 0.
   return functools.partial(
       data_util.preprocess_image,
-      height=FLAGS.image_size,
+      height=70,
       width=FLAGS.image_size,
       is_training=is_training,
       color_jitter_strength=color_jitter_strength,
