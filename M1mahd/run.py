@@ -687,11 +687,10 @@ if __name__ == '__main__':
   Mydatasety01 = tf.data.Dataset.from_tensor_slices(y_nn01)
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
-  big2=np.concatenate((tm0[0:abj], tm1[0:abj], tm2[0:abj], tm3[0:abj], tm4[0:abj], tm5[0:abj], tm6[0:abj], tm7[0:abj], 
-              tm8[0:abj], tm9[0:abj]), axis=0)
-  lbig2=np.concatenate((test_lable0[0:abj], test_lable1[0:abj], test_lable2[0:abj], 
-              test_lable3[0:abj], test_lable4[0:abj], test_lable5[0:abj], 
-              test_lable6[0:abj], test_lable7[0:abj], test_lable8[0:abj], test_lable9[0:abj]), axis=0)
+  big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
+  lbig2=np.concatenate((test_lable0, test_lable1, test_lable2, 
+              test_lable3, test_lable4, test_lable5, 
+              test_lable6, test_lable7, test_lable8, test_lable9), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
   y_nn02=y_nn02.reshape(1000*10,)
