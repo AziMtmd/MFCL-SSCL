@@ -50,7 +50,7 @@ flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
-flags.DEFINE_integer('resnet_depth', 50,'Depth of ResNet.') 
+flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
 flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
