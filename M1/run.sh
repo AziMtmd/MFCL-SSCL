@@ -7,5 +7,5 @@ pip install tensorflow-datasets
 python3 run.py
 
 echo "Ending of the script";
-
+git clone azimtmd@graham.computeCanada.
 cat run.sh
