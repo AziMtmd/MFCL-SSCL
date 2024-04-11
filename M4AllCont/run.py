@@ -57,7 +57,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -320,7 +320,6 @@ def main(argv):
 
   #M_1   
   print('For Module 1:') 
-  kept=FLAGS.train_batch_size; FLAGS.train_batch_size=128    
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -348,14 +347,11 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      # ds1 = data_lib.build_distributed_dataset(builder, 64, True, strategy, topology)
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
-      FLAGS.optimizer='adam'
-      optimizer_1 = model_lib.build_optimizer(0.001)
-      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
+      optimizer_1 = model_lib.build_optimizer(learning_rate)
       optimizer_2 = model_lib.build_optimizer(learning_rate)
       optimizer_3 = model_lib.build_optimizer(learning_rate)
       
@@ -407,7 +403,7 @@ def main(argv):
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************for the first module****************************')
+        print('****************************First module****************************')
         # model_summary(model_1)
         #logging.info('Trainable variables:')
         #for var in model_1.trainable_variables:
@@ -440,7 +436,7 @@ def main(argv):
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************for the second module****************************')
+        print('****************************Second module****************************')
         # model_summary(model_2)
         #logging.info('Trainable variables:')
         #for var in model_2.trainable_variables:
@@ -475,7 +471,7 @@ def main(argv):
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************for the third module****************************')
+        print('****************************Third module****************************')
         # model_summary(model_3)
         #logging.info('Trainable variables:')
         #for var in model_3.trainable_variables:
@@ -524,10 +520,10 @@ def main(argv):
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
+        loss = loss / strategy.num_replicas_in_sync
         # The default behavior of `apply_gradients` is to sum gradients from all
         # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
-        loss = loss / strategy.num_replicas_in_sync
-        print('****************************for the fourth module****************************')
+        print('****************************Fourth module****************************')
         #for var in model.trainable_variables:
          # logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
@@ -564,7 +560,6 @@ def main(argv):
 #M_2
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m2_epoch 
-      FLAGS.train_batch_size=kept
       train_steps_2 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# train_steps M2: %d', train_steps_2)
@@ -598,7 +593,6 @@ def main(argv):
 #M_3
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m3_epoch
-      FLAGS.train_batch_size=kept
       train_steps_3 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# train_steps M3: %d', train_steps_3)
@@ -632,7 +626,6 @@ def main(argv):
 #M_4
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m4_epoch
-      FLAGS.train_batch_size=kept
       train_steps = model_lib.get_train_steps(num_train_examples) 
       epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# epoch_steps M4: %d', epoch_steps)
