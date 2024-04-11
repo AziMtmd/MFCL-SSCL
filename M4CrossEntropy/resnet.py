@@ -602,24 +602,22 @@ class Resnet_Module_1(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
     for layer in self.encoder:
       inputs = layer(inputs, training=training)
 
-    print('inputs2.shape', inputs.shape)
     for i, layer in enumerate(self.block_groups):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
         inputs = tf.stop_gradient(inputs)
       inputs = layer(inputs, training=training)
-    print('inputs3.shape', inputs.shape)
+
     if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 4:
       inputs = tf.stop_gradient(inputs)
-    # if self.data_format == 'channels_last':
-    #   inputs = tf.reduce_mean(inputs, [1, 2])
-    # else:
-    #   inputs = tf.reduce_mean(inputs, [2, 3])
+    convrep=inputs
+    if self.data_format == 'channels_last':
+      inputs = tf.reduce_mean(inputs, [1, 2])
+    else:
+      inputs = tf.reduce_mean(inputs, [2, 3])
 
-    print('inputs4.shape', inputs.shape)
     inputs = tf.identity(inputs, 'final_avg_pool')
-    print('inputs.shape', inputs.shape)
-
-    return inputs
+    # return inputs
+    return inputs, convrep
 
 
 class Resnet_Module_2(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
