@@ -42,11 +42,11 @@ flags.DEFINE_bool('module11_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 80, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 80, 'Number of epochs to train for.')
-flags.DEFINE_integer('m11_epoch', 80, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 80, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 80, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m11_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
@@ -59,7 +59,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -322,8 +322,7 @@ def main(argv):
   logging.info('# eval steps M1: %d', eval_steps)
 
   #M_1   
-  print('For Module 1:') 
-  kept=FLAGS.train_batch_size; FLAGS.train_batch_size=128    
+  print('For Module 1:')   
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -398,8 +397,6 @@ def main(argv):
         
         hdd, fea = model_1(features, training=True)
         #flops(model_1)
-        print('fea.shape', fea.shape)
-        print('hdd.shape', hdd.shape)
         loss = None
         if hdd is not None:
           outputs = hdd          
@@ -410,6 +407,10 @@ def main(argv):
             loss += unsup_loss          
           metrics.update_finetune_metrics_train(unsupervised_loss_metric,
                                                 unsupervised_acc_metric, loss, fea, outputs)
+        
+        weight_decay = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
+        weight_decay_metric.update_state(weight_decay)
+        loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the first module****************************')
@@ -452,7 +453,6 @@ def main(argv):
          # logging.info(var.name)
         grads = tape.gradient(loss, model_11.trainable_variables)
         optimizer_11.apply_gradients(zip(grads, model_11.trainable_variables))
-
 
 
     def single_step_2(features, labels):
@@ -570,8 +570,6 @@ def main(argv):
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
-        # The default behavior of `apply_gradients` is to sum gradients from all
-        # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
         loss = loss / strategy.num_replicas_in_sync
         print('****************************for the fourth module****************************')
        # for var in model.trainable_variables:
@@ -611,7 +609,6 @@ def main(argv):
 #M_11
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m11_epoch 
-      FLAGS.train_batch_size=kept
       train_steps_11 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_11 = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# train_steps M2: %d', train_steps_11)
@@ -645,7 +642,6 @@ def main(argv):
 #M_2
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m2_epoch 
-      FLAGS.train_batch_size=kept
       train_steps_2 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# train_steps M2: %d', train_steps_2)
@@ -679,7 +675,6 @@ def main(argv):
 #M_3
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m3_epoch
-      FLAGS.train_batch_size=kept
       train_steps_3 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# train_steps M3: %d', train_steps_3)
@@ -713,7 +708,6 @@ def main(argv):
 #M_4
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m4_epoch
-      FLAGS.train_batch_size=kept
       train_steps = model_lib.get_train_steps(num_train_examples) 
       epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
       logging.info('# epoch_steps M4: %d', epoch_steps)
