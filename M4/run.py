@@ -399,7 +399,7 @@ def main(argv):
             loss += unsup_loss          
           # metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
           #                                       con_loss, logits_con, labels_con)
-        weight_decay = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
+        weight_decay = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
