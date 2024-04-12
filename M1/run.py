@@ -42,14 +42,14 @@ flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
-flags.DEFINE_integer('resnet_depth', 50,'Depth of ResNet.') 
+flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.') 
 flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
 flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -317,8 +317,6 @@ def main(argv):
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
 
   with strategy.scope():
-    # model_2 = model_lib.Module_2(num_classes)
-    # model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
   if FLAGS.mode == 'eval':
@@ -334,20 +332,14 @@ def main(argv):
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
-      FLAGS.optimizer='adam'
-      optimizer_1 = model_lib.build_optimizer(0.001)
-      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
-      optimizer_2 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
       weight_decay_metric = tf.keras.metrics.Mean('train/weight_decay')
       total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
       all_metrics.extend([weight_decay_metric, total_loss_metric])
-      if FLAGS.train_mode == 'pretrain':
-        # unsupervised_loss_metric = tf.keras.metrics.Mean('train/unsupervised_loss')
-        # unsupervised_acc_metric = tf.keras.metrics.Mean('train/unsupervised_acc')        
+      if FLAGS.train_mode == 'pretrain':      
         contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
         contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
         contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
@@ -359,8 +351,6 @@ def main(argv):
         all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
 
       # Restore checkpoint if available.
-      # checkpoint_manager_1 = try_restore_from_checkpoint(model_1, optimizer_1.iterations, optimizer_1)
-      # checkpoint_manager_2 = try_restore_from_checkpoint(model_2, optimizer_2.iterations, optimizer_2)
       checkpoint_manager = try_restore_from_checkpoint(model, optimizer.iterations, optimizer)
     
     def single_step(features, labels):
@@ -372,7 +362,7 @@ def main(argv):
 
         # rep = model_1(features, training=False)
         projection_head_outputs, supervised_head_outputs = model(features, training=True)
-        flops(model)
+        # flops(model)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
