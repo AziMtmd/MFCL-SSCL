@@ -227,16 +227,6 @@ def perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps, ck
     outputs = supervised_head_outputs
     l = labels['labels']
     metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
-
-    reg_loss = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
-    regularization_loss.update_state(reg_loss)
-
-    reg_loss = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
-    regularization_loss.update_state(reg_loss)
-
-    reg_loss = model_lib.add_weight_decay(model_3, adjust_per_optimizer=True)
-    regularization_loss.update_state(reg_loss)
-
     reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
     regularization_loss.update_state(reg_loss)
 
