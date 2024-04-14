@@ -650,8 +650,8 @@ class Resnet_Module_2(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
     for i, layer in enumerate(self.block_groups2):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
         inputs = tf.stop_gradient(inputs)
-      # if FLAGS.module2_train==True:        
-      inputs = layer(inputs, training=training)
+      if FLAGS.module2_train==True:        
+        inputs = layer(inputs, training=training)
     convrep=inputs
     if self.data_format == 'channels_last':
       inputs = tf.reduce_mean(inputs, [1, 2])
@@ -691,8 +691,8 @@ class Resnet_Module_3(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
     for i, layer in enumerate(self.block_groups):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
         inputs = tf.stop_gradient(inputs)
-      # if FLAGS.module3_train==True:        
-      inputs = layer(inputs, training=FLAGS.module3_train)
+      if FLAGS.module3_train==True:        
+        inputs = layer(inputs, training=FLAGS.module3_train)
     convrep=inputs
     if self.data_format == 'channels_last':
       inputs = tf.reduce_mean(inputs, [1, 2])
