@@ -41,7 +41,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
 flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
+flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
@@ -52,7 +52,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -532,7 +532,7 @@ if __name__ == '__main__':
   # test_lable66=y_test[jdx66];test_lable77=y_test[jdx77];test_lable88=y_test[jdx88]
   # test_lable99=y_test[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=500
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
