@@ -21,16 +21,22 @@ pip install scikit-learn
 #python3 M4SemiParallel/run.py --dataset='cifar10' --image_size=32 --eval_split='test' 
 
 python3 pakkon.py
-python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
 
 python3 pakkon.py
-python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
 
 python3 pakkon.py
-python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300 --m2_epoch=300 --m3_epoch=300 --m4_epoch=300
 
 python3 pakkon.py
-python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300 --m2_epoch=300 --m3_epoch=300 --m4_epoch=300
+
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400 --m2_epoch=400 --m3_epoch=400 --m4_epoch=400
+
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=400 --m2_epoch=400 --m3_epoch=400 --m4_epoch=400
 
 #python3 pakkon.py
 #python3 M4AllCont/run.py --resnet_depth=18 --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
