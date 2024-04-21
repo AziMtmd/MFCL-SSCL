@@ -26,6 +26,12 @@ python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --trai
 python3 pakkon.py
 python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200
 
+python3 pakkon.py
+python3 M4/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300
+
+python3 pakkon.py
+python3 M4AllCont/run.py --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=300
+
 #python3 pakkon.py
 #python3 M4AllCont/run.py --resnet_depth=18 --dataset='cifar10' --image_size=32 --eval_split='test' --train_epochs=200 --m2_epoch=200 --m3_epoch=200 --m4_epoch=200
 
