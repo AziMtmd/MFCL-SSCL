@@ -52,7 +52,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -510,7 +510,7 @@ if __name__ == '__main__':
   elm0=yem[jdx00];elm1=yem[jdx11];elm2=yem[jdx22]; elm3=yem[jdx33];elm4=yem[jdx44];elm5=yem[jdx55]
   elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=1000
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -664,11 +664,9 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  # lbig2=np.concatenate((test_lable0, test_lable1, test_lable2, 
-  #             test_lable3, test_lable4, test_lable5, 
-  #             test_lable6, test_lable7, test_lable8, test_lable9), axis=0)
+  lbig2=np.concatenate((elm0, elm1, elm2, elm3, elm4, elm5, elm6, elm7, elm8, elm9), axis=0)
 
-  x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig))
+  x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
   y_nn02=y_nn02.reshape(1000*10,)
   Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
   Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
