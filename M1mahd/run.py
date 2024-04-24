@@ -52,7 +52,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -465,74 +465,52 @@ def main(argv):
 
 if __name__ == '__main__':
 
-  (x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
-  (x_train1, y_train1), (x_test1, y_test1) = keras.datasets.mnist.load_data()
-  
-  idx0 = (y_train == 0).reshape(x_train.shape[0]);idx1 = (y_train == 1).reshape(x_train.shape[0])
-  idx2 = (y_train == 2).reshape(x_train.shape[0]);idx3 = (y_train == 3).reshape(x_train.shape[0])
-  idx4 = (y_train == 4).reshape(x_train.shape[0]);idx5 = (y_train == 5).reshape(x_train.shape[0])
-  idx6 = (y_train == 6).reshape(x_train.shape[0]);idx7 = (y_train == 7).reshape(x_train.shape[0])
-  idx8 = (y_train == 8).reshape(x_train.shape[0]);idx9 = (y_train == 9).reshape(x_train.shape[0])
+  (xt, yt), (xe, ye) = keras.datasets.cifar10.load_data() 
+  idx0 = (yt == 0).reshape(xt.shape[0]);idx1 = (yt == 1).reshape(xt.shape[0])
+  idx2 = (yt == 2).reshape(xt.shape[0]);idx3 = (yt == 3).reshape(xt.shape[0])
+  idx4 = (yt == 4).reshape(xt.shape[0]);idx5 = (yt == 5).reshape(xt.shape[0])
+  idx6 = (yt == 6).reshape(xt.shape[0]);idx7 = (yt == 7).reshape(xt.shape[0])
+  idx8 = (yt == 8).reshape(xt.shape[0]);idx9 = (yt == 9).reshape(xt.shape[0])
 
-  jdx0 = (y_test == 0).reshape(x_test.shape[0]);jdx1 = (y_test == 1).reshape(x_test.shape[0])
-  jdx2 = (y_test == 2).reshape(x_test.shape[0]);jdx3 = (y_test == 3).reshape(x_test.shape[0])
-  jdx4 = (y_test == 4).reshape(x_test.shape[0]);jdx5 = (y_test == 5).reshape(x_test.shape[0])
-  jdx6 = (y_test == 6).reshape(x_test.shape[0]);jdx7 = (y_test == 7).reshape(x_test.shape[0])
-  jdx8 = (y_test == 8).reshape(x_test.shape[0]);jdx9 = (y_test == 9).reshape(x_test.shape[0])
+  ti0 = xt[idx0]; ti1 = xt[idx1]; ti2 = xt[idx2]; ti3 = xt[idx3]; ti4 = xt[idx4]; ti5 = xt[idx5]; ti6 = xt[idx6]; ti7 = xt[idx7] 
+  ti8 = xt[idx8]; ti9 = xt[idx9]
+  tl0=yt[idx0];tl1=yt[idx1];tl2=yt[idx2]; tl3=yt[idx3];tl4=yt[idx4];tl5=yt[idx5]; tl6=yt[idx6];tl7=yt[idx7];tl8=yt[idx8]; tl9=yt[idx9]
 
-  filtered_images0 = x_train[idx0]; filtered_images1 = x_train[idx1]; filtered_images2 = x_train[idx2]
-  filtered_images3 = x_train[idx3]; filtered_images4 = x_train[idx4]; filtered_images5 = x_train[idx5]
-  filtered_images6 = x_train[idx6]; filtered_images7 = x_train[idx7]; filtered_images8 = x_train[idx8]
-  filtered_images9 = x_train[idx9]
+  jdx0 = (ye == 0).reshape(xe.shape[0]);jdx1 = (ye == 1).reshape(xe.shape[0])
+  jdx2 = (ye == 2).reshape(xe.shape[0]);jdx3 = (ye == 3).reshape(xe.shape[0])
+  jdx4 = (ye == 4).reshape(xe.shape[0]);jdx5 = (ye == 5).reshape(xe.shape[0])
+  jdx6 = (ye == 6).reshape(xe.shape[0]);jdx7 = (ye == 7).reshape(xe.shape[0])
+  jdx8 = (ye == 8).reshape(xe.shape[0]);jdx9 = (ye == 9).reshape(xe.shape[0])
 
-  filtered_lable0=y_train[idx0];filtered_lable1=y_train[idx1];filtered_lable2=y_train[idx2]
-  filtered_lable3=y_train[idx3];filtered_lable4=y_train[idx4];filtered_lable5=y_train[idx5]
-  filtered_lable6=y_train[idx6];filtered_lable7=y_train[idx7];filtered_lable8=y_train[idx8]
-  filtered_lable9=y_train[idx9]
+  ei0 = xe[jdx0]; ei1 = xe[jdx1]; ei2 = xe[jdx2]; ei3 = xe[jdx3]; ei4 = xe[jdx4]; ei5 = xe[jdx5]
+  ei6 = xe[jdx6]; ei7 = xe[jdx7]; ei8 = xe[jdx8]; ei9 = xe[jdx9]
+  el0=ye[jdx0];el1=ye[jdx1];el2=ye[jdx2]; el3=ye[jdx3];el4=ye[jdx4];el5=ye[jdx5]; el6=ye[jdx6];el7=ye[jdx7];el8=ye[jdx8]; el9=ye[jdx9]
 
-  test_images0 = x_test[jdx0]; test_images1 = x_test[jdx1]; test_images2 = x_test[jdx2]
-  test_images3 = x_test[jdx3]; test_images4 = x_test[jdx4]; test_images5 = x_test[jdx5]
-  test_images6 = x_test[jdx6]; test_images7 = x_test[jdx7]; test_images8 = x_test[jdx8]
-  test_images9 = x_test[jdx9]
+    
+  (xtm, ytm), (xem, yem) = keras.datasets.mnist.load_data()
+  idx00 = (ytm == 0).reshape(xtm.shape[0]);idx11 = (ytm == 1).reshape(xtm.shape[0])
+  idx22 = (ytm == 2).reshape(xtm.shape[0]);idx33 = (ytm == 3).reshape(xtm.shape[0])
+  idx44 = (ytm == 4).reshape(xtm.shape[0]);idx55 = (ytm == 5).reshape(xtm.shape[0])
+  idx66 = (ytm == 6).reshape(xtm.shape[0]);idx77 = (ytm == 7).reshape(xtm.shape[0])
+  idx88 = (ytm == 8).reshape(xtm.shape[0]);idx99 = (ytm == 9).reshape(xtm.shape[0])
 
-  test_lable0=y_test[jdx0];test_lable1=y_test[jdx1];test_lable2=y_test[jdx2]
-  test_lable3=y_test[jdx3];test_lable4=y_test[jdx4];test_lable5=y_test[jdx5]
-  test_lable6=y_test[jdx6];test_lable7=y_test[jdx7];test_lable8=y_test[jdx8]
-  test_lable9=y_test[jdx9]
+  tim0 = xtm[idx00]; tim1 = xtm[idx11]; tim2 = xtm[idx22]; tim3 = xtm[idx33]; tim4 = xtm[idx44]; tim5 = xtm[idx55]
+  tim6 = xtm[idx66]; tim7 = xtm[idx77]; tim8 = xtm[idx88]; tim9 = xtm[idx99]
+  tlm0=ytm[idx00];tlm1=ytm[idx11];tlm2=ytm[idx22]; tlm3=ytm[idx33];tlm4=ytm[idx44];tlm5=ytm[idx55]
+  tlm6=ytm[idx66];tlm7=ytm[idx77];tlm8=ytm[idx88]; tlm9=ytm[idx99]
 
-  idx00 = (y_train1 == 0).reshape(x_train1.shape[0]);idx11 = (y_train1 == 1).reshape(x_train1.shape[0])
-  idx22 = (y_train1 == 2).reshape(x_train1.shape[0]);idx33 = (y_train1 == 3).reshape(x_train1.shape[0])
-  idx44 = (y_train1 == 4).reshape(x_train1.shape[0]);idx55 = (y_train1 == 5).reshape(x_train1.shape[0])
-  idx66 = (y_train1 == 6).reshape(x_train1.shape[0]);idx77 = (y_train1 == 7).reshape(x_train1.shape[0])
-  idx88 = (y_train1 == 8).reshape(x_train1.shape[0]);idx99 = (y_train1 == 9).reshape(x_train1.shape[0])
+  jdx00 = (yem == 0).reshape(xem.shape[0]);jdx11 = (yem == 1).reshape(xem.shape[0])
+  jdx22 = (yem == 2).reshape(xem.shape[0]);jdx33 = (yem == 3).reshape(xem.shape[0])
+  jdx44 = (yem == 4).reshape(xem.shape[0]);jdx55 = (yem == 5).reshape(xem.shape[0])
+  jdx66 = (yem == 6).reshape(xem.shape[0]);jdx77 = (yem == 7).reshape(xem.shape[0])
+  jdx88 = (yem == 8).reshape(xem.shape[0]);jdx99 = (yem == 9).reshape(xem.shape[0])
 
-  jdx00 = (y_test1 == 0).reshape(x_test1.shape[0]);jdx11 = (y_test1 == 1).reshape(x_test1.shape[0])
-  jdx22 = (y_test1 == 2).reshape(x_test1.shape[0]);jdx33 = (y_test1 == 3).reshape(x_test1.shape[0])
-  jdx44 = (y_test1 == 4).reshape(x_test1.shape[0]);jdx55 = (y_test1 == 5).reshape(x_test1.shape[0])
-  jdx66 = (y_test1 == 6).reshape(x_test1.shape[0]);jdx77 = (y_test1 == 7).reshape(x_test1.shape[0])
-  jdx88 = (y_test1 == 8).reshape(x_test1.shape[0]);jdx99 = (y_test1 == 9).reshape(x_test1.shape[0])
-
-  filtered_images00 = x_train1[idx00]; filtered_images11 = x_train1[idx11]; filtered_images22 = x_train1[idx22]
-  filtered_images33 = x_train1[idx33]; filtered_images44 = x_train1[idx44]; filtered_images55 = x_train1[idx55]
-  filtered_images66 = x_train1[idx66]; filtered_images77 = x_train1[idx77]; filtered_images88 = x_train1[idx88]
-  filtered_images99 = x_train1[idx99]
-
-  # filtered_lable00=y_train1[idx00];filtered_lable11=y_train1[idx11];filtered_lable22=y_train1[idx22]
-  # filtered_lable33=y_train1[idx33];filtered_lable44=y_train1[idx44];filtered_lable55=y_train1[idx55]
-  # filtered_lable66=y_train1[idx66];filtered_lable77=y_train1[idx77];filtered_lable88=y_train1[idx88]
-  # filtered_lable99=y_train1[idx99]
-
-  test_images00 = x_test1[jdx00]; test_images11 = x_test1[jdx11]; test_images22 = x_test1[jdx22]
-  test_images33 = x_test1[jdx33]; test_images44 = x_test1[jdx44]; test_images55 = x_test1[jdx55]
-  test_images66 = x_test1[jdx66]; test_images77 = x_test1[jdx77]; test_images88 = x_test1[jdx88]
-  test_images99 = x_test1[jdx99]
-
-  # test_lable00=y_test[jdx00];test_lable11=y_test[jdx11];test_lable22=y_test[jdx22]
-  # test_lable33=y_test[jdx33];test_lable44=y_test[jdx44];test_lable55=y_test[jdx55]
-  # test_lable66=y_test[jdx66];test_lable77=y_test[jdx77];test_lable88=y_test[jdx88]
-  # test_lable99=y_test[jdx99]
+  eim0 = xem[jdx00]; eim1 = xem[jdx11]; eim2 = xem[jdx22]; eim3 = xem[jdx33]; eim4 = xem[jdx44]; eim5 = xem[jdx55]
+  eim6 = xem[jdx66]; eim7 = xem[jdx77]; eim8 = xem[jdx88]; eim9 = xem[jdx99]
+  elm0=yem[jdx00];elm1=yem[jdx11];elm2=yem[jdx22]; elm3=yem[jdx33];elm4=yem[jdx44];elm5=yem[jdx55]
+  elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=500
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=1000
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -549,137 +527,135 @@ if __name__ == '__main__':
   for j in range (abj):
     for x in range(0, height2):
       for y in range(0, width2):
-        im0[j][x+height1, y]=filtered_images00[j][x, y] 
+        im0[j][x+height1, y]=tim0[j][x, y] 
         if abj<1000:
-          tm0[j][x+height1, y]=test_images00[j][x, y]  
+          tm0[j][x+height1, y]=eim0[j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im0[j][x, y, c]=filtered_images0[j][x, y, c];
+          im0[j][x, y, c]=ti0[j][x, y, c]
           if abj<1000: 
-            tm0[j][x, y, c]=test_images0[j][x, y, c]
+            tm0[j][x, y, c]=el0[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im1[j][x+height1, y]=filtered_images11[j][x, y]
+        im1[j][x+height1, y]=tim1[j][x, y]
         if abj<1000:
-          tm1[j][x+height1, y]=test_images11[j][x, y]
+          tm1[j][x+height1, y]=eim1[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im1[j][x, y, c]=filtered_images1[j][x, y, c]; 
+          im1[j][x, y, c]=ti1[j][x, y, c] 
           if abj<1000:
-            tm1[j][x, y, c]=test_images1[j][x, y, c]
+            tm1[j][x, y, c]=el1[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im2[j][x+height1, y]=filtered_images22[j][x, y]; 
+        im2[j][x+height1, y]=tim2[j][x, y] 
         if abj<1000:
-          tm2[j][x+height1, y]=test_images22[j][x, y]
+          tm2[j][x+height1, y]=eim2[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im2[j][x, y, c]=filtered_images2[j][x, y, c]; 
+          im2[j][x, y, c]=ti2[j][x, y, c] 
           if abj<1000:
-            tm2[j][x, y, c]=test_images2[j][x, y, c]
+            tm2[j][x, y, c]=el2[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im3[j][x+height1, y]=filtered_images33[j][x, y]; 
+        im3[j][x+height1, y]=tim3[j][x, y] 
         if abj<1000:
-          tm3[j][x+height1, y]=test_images33[j][x, y]
+          tm3[j][x+height1, y]=eim3[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im3[j][x, y, c]=filtered_images3[j][x, y, c]; 
+          im3[j][x, y, c]=ti3[j][x, y, c] 
           if abj<1000:
-            tm3[j][x, y, c]=test_images3[j][x, y, c]
+            tm3[j][x, y, c]=el3[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im4[j][x+height1, y]=filtered_images44[j][x, y]; 
+        im4[j][x+height1, y]=tim4[j][x, y] 
         if abj<1000:
-          tm4[j][x+height1, y]=test_images44[j][x, y]
+          tm4[j][x+height1, y]=eim4[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im4[j][x, y, c]=filtered_images4[j][x, y, c]; 
+          im4[j][x, y, c]=ti4[j][x, y, c] 
           if abj<1000:
-            tm4[j][x, y, c]=test_images4[j][x, y, c]
+            tm4[j][x, y, c]=el4[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im5[j][x+height1, y]=filtered_images55[j][x, y]; 
+        im5[j][x+height1, y]=tim5[j][x, y] 
         if abj<1000:
-          tm5[j][x+height1, y]=test_images55[j][x, y]
+          tm5[j][x+height1, y]=eim5[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im5[j][x, y, c]=filtered_images5[j][x, y, c]; 
+          im5[j][x, y, c]=ti5[j][x, y, c] 
           if abj<1000:
-            tm5[j][x, y, c]=test_images5[j][x, y, c]
+            tm5[j][x, y, c]=el5[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im6[j][x+height1, y]=filtered_images66[j][x, y]; 
+        im6[j][x+height1, y]=tim6[j][x, y] 
         if abj<1000:
-          tm6[j][x+height1, y]=test_images66[j][x, y]
+          tm6[j][x+height1, y]=eim6[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im6[j][x, y, c]=filtered_images6[j][x, y, c]; 
+          im6[j][x, y, c]=ti6[j][x, y, c]
           if abj<1000:
-            tm6[j][x, y, c]=test_images6[j][x, y, c]
+            tm6[j][x, y, c]=el6[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im7[j][x+height1, y]=filtered_images77[j][x, y]; 
+        im7[j][x+height1, y]=tim7[j][x, y] 
         if abj<1000:
-          tm7[j][x+height1, y]=test_images77[j][x, y]
+          tm7[j][x+height1, y]=eim7[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im7[j][x, y, c]=filtered_images7[j][x, y, c]; 
+          im7[j][x, y, c]=ti7[j][x, y, c] 
           if abj<1000:
-            tm7[j][x, y, c]=test_images7[j][x, y, c]
+            tm7[j][x, y, c]=el7[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im8[j][x+height1, y]=filtered_images88[j][x, y]; 
+        im8[j][x+height1, y]=tim8[j][x, y] 
         if abj<1000:
-          tm8[j][x+height1, y]=test_images88[j][x, y]
+          tm8[j][x+height1, y]=eim8[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im8[j][x, y, c]=filtered_images8[j][x, y, c]; 
+          im8[j][x, y, c]=ti8[j][x, y, c] 
           if abj<1000:
-            tm8[j][x, y, c]=test_images8[j][x, y, c]
+            tm8[j][x, y, c]=el8[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
       for y in range (0, width2):
-        im9[j][x+height1, y]=filtered_images99[j][x, y]; 
+        im9[j][x+height1, y]=tim9[j][x, y]
         if abj<1000:
-          tm9[j][x+height1, y]=test_images99[j][x, y]
+          tm9[j][x+height1, y]=eim9[j][x, y]
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
-          im9[j][x, y, c]=filtered_images9[j][x, y, c]; 
+          im9[j][x, y, c]=ti9[j][x, y, c] 
           if abj<1000:
-            tm9[j][x, y, c]=test_images9[j][x, y, c]
+            tm9[j][x, y, c]=el9[j][x, y, c]
 
   big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
-  lbig=np.concatenate((filtered_lable0[0:abj], filtered_lable1[0:abj], filtered_lable2[0:abj], 
-              filtered_lable3[0:abj], filtered_lable4[0:abj], filtered_lable5[0:abj], 
-              filtered_lable6[0:abj], filtered_lable7[0:abj], filtered_lable8[0:abj], filtered_lable9[0:abj]), axis=0)
+  lbig=np.concatenate((tl0[0:abj], tl1[0:abj], tl2[0:abj], tl3[0:abj], tl4[0:abj], tl5[0:abj], tl6[0:abj], tl7[0:abj], tl8[0:abj], tl9[0:abj]), axis=0)
 
   x_nn01, y_nn01 = shuffle(np.array(big), np.array(lbig))
   y_nn01=y_nn01.reshape(abj*10,)
@@ -688,11 +664,11 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((test_lable0, test_lable1, test_lable2, 
-              test_lable3, test_lable4, test_lable5, 
-              test_lable6, test_lable7, test_lable8, test_lable9), axis=0)
+  # lbig2=np.concatenate((test_lable0, test_lable1, test_lable2, 
+  #             test_lable3, test_lable4, test_lable5, 
+  #             test_lable6, test_lable7, test_lable8, test_lable9), axis=0)
 
-  x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
+  x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig))
   y_nn02=y_nn02.reshape(1000*10,)
   Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
   Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
