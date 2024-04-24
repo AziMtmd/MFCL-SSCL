@@ -664,7 +664,7 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((elm0, elm1, elm2, elm3, elm4, elm5, elm6, elm7, elm8, elm9), axis=0)
+  lbig2=np.concatenate((el0, el1, el2, el3, el4, el5, el6, el7, el8, el9), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
   y_nn02=y_nn02.reshape(1000*10,)
