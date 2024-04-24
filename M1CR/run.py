@@ -36,12 +36,14 @@ import sys
 import tf_slim as slim
 from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+import random
+
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
-flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
+flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
 flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
@@ -524,135 +526,148 @@ if __name__ == '__main__':
   tm6=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
   tm8=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
 
+  Randim=[ti0, ti1, ti2, ti3, ti4, ti5, ti6, ti7, ti8, ti9]
+  Randt=[tim0, tim1, tim2, tim3, tim4, tim5, tim6, tim7, tim8, tim9]
+
   for j in range (abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range(0, width2):
-        im0[j][x+height1, y]=tim0[j][x, y] 
+        im0[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm0[j][x+height1, y]=eim0[j][x, y]  
+          tm0[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im0[j][x, y, c]=ti0[j][x, y, c]
           if abj<1000: 
-            tm0[j][x, y, c]=el0[j][x, y, c]
+            tm0[j][x, y, c]=ei0[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im1[j][x+height1, y]=tim1[j][x, y]
+        im1[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm1[j][x+height1, y]=eim1[j][x, y]
+          tm1[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im1[j][x, y, c]=ti1[j][x, y, c] 
           if abj<1000:
-            tm1[j][x, y, c]=el1[j][x, y, c]
+            tm1[j][x, y, c]=ei1[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im2[j][x+height1, y]=tim2[j][x, y] 
+        im2[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm2[j][x+height1, y]=eim2[j][x, y]
+          tm2[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im2[j][x, y, c]=ti2[j][x, y, c] 
           if abj<1000:
-            tm2[j][x, y, c]=el2[j][x, y, c]
+            tm2[j][x, y, c]=ei2[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im3[j][x+height1, y]=tim3[j][x, y] 
+        im3[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm3[j][x+height1, y]=eim3[j][x, y]
+          tm3[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im3[j][x, y, c]=ti3[j][x, y, c] 
           if abj<1000:
-            tm3[j][x, y, c]=el3[j][x, y, c]
+            tm3[j][x, y, c]=ei3[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im4[j][x+height1, y]=tim4[j][x, y] 
+        im4[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm4[j][x+height1, y]=eim4[j][x, y]
+          tm4[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im4[j][x, y, c]=ti4[j][x, y, c] 
           if abj<1000:
-            tm4[j][x, y, c]=el4[j][x, y, c]
+            tm4[j][x, y, c]=ei4[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im5[j][x+height1, y]=tim5[j][x, y] 
+        im5[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm5[j][x+height1, y]=eim5[j][x, y]
+          tm5[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im5[j][x, y, c]=ti5[j][x, y, c] 
           if abj<1000:
-            tm5[j][x, y, c]=el5[j][x, y, c]
+            tm5[j][x, y, c]=ei5[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im6[j][x+height1, y]=tim6[j][x, y] 
+        im6[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm6[j][x+height1, y]=eim6[j][x, y]
+          tm6[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im6[j][x, y, c]=ti6[j][x, y, c]
           if abj<1000:
-            tm6[j][x, y, c]=el6[j][x, y, c]
+            tm6[j][x, y, c]=ei6[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im7[j][x+height1, y]=tim7[j][x, y] 
+        im7[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm7[j][x+height1, y]=eim7[j][x, y]
+          tm7[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im7[j][x, y, c]=ti7[j][x, y, c] 
           if abj<1000:
-            tm7[j][x, y, c]=el7[j][x, y, c]
+            tm7[j][x, y, c]=ei7[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im8[j][x+height1, y]=tim8[j][x, y] 
+        im8[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm8[j][x+height1, y]=eim8[j][x, y]
+          tm8[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im8[j][x, y, c]=ti8[j][x, y, c] 
           if abj<1000:
-            tm8[j][x, y, c]=el8[j][x, y, c]
+            tm8[j][x, y, c]=ei8[j][x, y, c]
 
   for j in range (0, abj):
+    number = random.randint(0, 9)
     for x in range(0, height2):
       for y in range (0, width2):
-        im9[j][x+height1, y]=tim9[j][x, y]
+        im9[j][x+height1, y]=Randim[number][j][x, y] 
         if abj<1000:
-          tm9[j][x+height1, y]=eim9[j][x, y]
+          tm9[j][x+height1, y]=Randt[number][j][x, y]  
     for x in range(0, height1):
       for y in range (0, width1):
         for c in range(ch1):
           im9[j][x, y, c]=ti9[j][x, y, c] 
           if abj<1000:
-            tm9[j][x, y, c]=el9[j][x, y, c]
+            tm9[j][x, y, c]=ei9[j][x, y, c]
 
   big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
   lbig=np.concatenate((tl0[0:abj], tl1[0:abj], tl2[0:abj], tl3[0:abj], tl4[0:abj], tl5[0:abj], tl6[0:abj], tl7[0:abj], tl8[0:abj], tl9[0:abj]), axis=0)
@@ -664,7 +679,7 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((elm0, elm1, elm2, elm3, elm4, elm5, elm6, elm7, elm8, elm9), axis=0)
+  lbig2=np.concatenate((el0, el1, el2, el3, el4, el5, el6, el7, el8, el9), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
   y_nn02=y_nn02.reshape(1000*10,)
