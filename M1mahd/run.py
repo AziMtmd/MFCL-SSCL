@@ -535,7 +535,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im0[j][x, y, c]=ti0[j][x, y, c]
           if abj<1000: 
-            tm0[j][x, y, c]=el0[j][x, y, c]
+            tm0[j][x, y, c]=ei0[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -548,7 +548,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im1[j][x, y, c]=ti1[j][x, y, c] 
           if abj<1000:
-            tm1[j][x, y, c]=el1[j][x, y, c]
+            tm1[j][x, y, c]=ei1[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -561,7 +561,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im2[j][x, y, c]=ti2[j][x, y, c] 
           if abj<1000:
-            tm2[j][x, y, c]=el2[j][x, y, c]
+            tm2[j][x, y, c]=ei2[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -574,7 +574,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im3[j][x, y, c]=ti3[j][x, y, c] 
           if abj<1000:
-            tm3[j][x, y, c]=el3[j][x, y, c]
+            tm3[j][x, y, c]=ei3[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -587,7 +587,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im4[j][x, y, c]=ti4[j][x, y, c] 
           if abj<1000:
-            tm4[j][x, y, c]=el4[j][x, y, c]
+            tm4[j][x, y, c]=ei4[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -600,7 +600,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im5[j][x, y, c]=ti5[j][x, y, c] 
           if abj<1000:
-            tm5[j][x, y, c]=el5[j][x, y, c]
+            tm5[j][x, y, c]=ei5[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -613,7 +613,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im6[j][x, y, c]=ti6[j][x, y, c]
           if abj<1000:
-            tm6[j][x, y, c]=el6[j][x, y, c]
+            tm6[j][x, y, c]=ei6[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -626,7 +626,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im7[j][x, y, c]=ti7[j][x, y, c] 
           if abj<1000:
-            tm7[j][x, y, c]=el7[j][x, y, c]
+            tm7[j][x, y, c]=ei7[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -639,7 +639,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im8[j][x, y, c]=ti8[j][x, y, c] 
           if abj<1000:
-            tm8[j][x, y, c]=el8[j][x, y, c]
+            tm8[j][x, y, c]=ei8[j][x, y, c]
 
   for j in range (0, abj):
     for x in range(0, height2):
@@ -652,7 +652,7 @@ if __name__ == '__main__':
         for c in range(ch1):
           im9[j][x, y, c]=ti9[j][x, y, c] 
           if abj<1000:
-            tm9[j][x, y, c]=el9[j][x, y, c]
+            tm9[j][x, y, c]=ei9[j][x, y, c]
 
   big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
   lbig=np.concatenate((tl0[0:abj], tl1[0:abj], tl2[0:abj], tl3[0:abj], tl4[0:abj], tl5[0:abj], tl6[0:abj], tl7[0:abj], tl8[0:abj], tl9[0:abj]), axis=0)
