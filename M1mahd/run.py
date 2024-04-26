@@ -511,6 +511,8 @@ if __name__ == '__main__':
   elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
   height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=500
+  r=min(abj, 1000)
+  print(r)
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -518,11 +520,12 @@ if __name__ == '__main__':
   im6=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im7=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im8=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im9=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
 
-  tm0=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm2=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm4=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm6=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm8=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm0=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm2=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm4=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm6=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm8=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+
 
   for j in range (abj):
     for x in range(0, height2):
@@ -665,10 +668,10 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((el0, el1, el2, el3, el4, el5, el6, el7, el8, el9), axis=0)
+  lbig2=np.concatenate((el0[0:r], el1[0:r], el2[0:r], el3[0:r], el4[0:r], el5[0:r], el6[0:r], el7[0:r], el8[0:r], el9[0:r]), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
-  y_nn02=y_nn02.reshape(1000*10,)
+  y_nn02=y_nn02.reshape(r*10,)
   Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
   Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
   dataset2 = tf.data.Dataset.zip((Mydatasetx02, Mydatasety02))
