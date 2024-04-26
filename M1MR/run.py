@@ -511,7 +511,9 @@ if __name__ == '__main__':
   elm0=yem[jdx00];elm1=yem[jdx11];elm2=yem[jdx22]; elm3=yem[jdx33];elm4=yem[jdx44];elm5=yem[jdx55]
   elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=500
+  r=min(abj, 1000)
+  print(r)
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -519,15 +521,15 @@ if __name__ == '__main__':
   im6=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im7=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im8=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im9=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
 
-  tm0=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm2=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm4=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm6=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm8=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm0=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm2=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm4=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm6=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm8=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
 
 
   Randim=[ti0, ti1, ti2, ti3, ti4, ti5, ti6, ti7, ti8, ti9]
-  Randt=[tim0, tim1, tim2, tim3, tim4, tim5, tim6, tim7, tim8, tim9]
+  Randt=[ei0, ei1, ei2, ei3, ei4, ei5, ei6, ei7, ei8, ei9]
 
   for j in range (abj):
     number = random.randint(0, 9)
@@ -669,9 +671,9 @@ if __name__ == '__main__':
           if abj<1000: 
             tm9[j][x, y, c]=Randt[number][j][x, y, c]
 
-  big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
-  lbig=np.concatenate((tlm0[0:abj], tlm1[0:abj], tlm2[0:abj], tlm3[0:abj], tlm4[0:abj], tlm5[0:abj], tlm6[0:abj], 
-  tlm7[0:abj], tlm8[0:abj], tlm9[0:abj]), axis=0)
+  big=np.concatenate((im0, im1, im2, im3, im4, im5, im6, im7, im8, im9), axis=0)
+  lbig=np.concatenate((tlm0[0:abj], tlm1[0:abj], tlm2[0:abj], tlm3[0:abj], tlm4[0:abj], tlm5[0:abj], 
+  tlm6[0:abj], tlm7[0:abj], tlm8[0:abj], tlm9[0:abj]), axis=0)
 
   x_nn01, y_nn01 = shuffle(np.array(big), np.array(lbig))
   y_nn01=y_nn01.reshape(abj*10,)
@@ -680,10 +682,10 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((elm0, elm1, elm2, elm3, elm4, elm5, elm6, elm7, elm8, elm9), axis=0)
+  lbig2=np.concatenate((elm0[0:r], elm1[0:r], elm2[0:r], elm3[0:r], elm4[0:r], elm5[0:r], elm6[0:r], elm7[0:r], elm8[0:r], elm9[0:r]), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
-  y_nn02=y_nn02.reshape(1000*10,)
+  y_nn02=y_nn02.reshape(r*10,)
   Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
   Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
   dataset2 = tf.data.Dataset.zip((Mydatasetx02, Mydatasety02))
