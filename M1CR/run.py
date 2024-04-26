@@ -20,6 +20,7 @@ import math
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.lib import r_
 from sklearn.utils import shuffle
 
 from absl import app
@@ -54,7 +55,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -512,7 +513,9 @@ if __name__ == '__main__':
   elm0=yem[jdx00];elm1=yem[jdx11];elm2=yem[jdx22]; elm3=yem[jdx33];elm4=yem[jdx44];elm5=yem[jdx55]
   elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=1000
+  r=min(abj, 1000)
+  print(r)
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -520,14 +523,15 @@ if __name__ == '__main__':
   im6=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im7=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im8=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im9=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
 
-  tm0=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm2=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm4=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm6=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
-  tm8=np.zeros((1000, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((1000, 32+28+10, width1, ch1), np.uint8)
+  tm0=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm1=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm2=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm3=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm4=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm5=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm6=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm7=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
+  tm8=np.zeros((r, 32+28+10, width1, ch1), np.uint8); tm9=np.zeros((r, 32+28+10, width1, ch1), np.uint8)
 
-  Randim=[ti0, ti1, ti2, ti3, ti4, ti5, ti6, ti7, ti8, ti9]
-  Randt=[tim0, tim1, tim2, tim3, tim4, tim5, tim6, tim7, tim8, tim9]
+  Randim=[tim0, tim1, tim2, tim3, tim4, tim5, tim6, tim7, tim8, tim9]
+  Randt=[eim0, eim1, eim2, eim3, eim4, eim5, eim6, eim7, eim8, eim9]
+
 
   for j in range (abj):
     number = random.randint(0, 9)
@@ -669,7 +673,7 @@ if __name__ == '__main__':
           if abj<1000:
             tm9[j][x, y, c]=ei9[j][x, y, c]
 
-  big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
+  big=np.concatenate((im0, im1, im2, im3, im4, im5, im6, im7, im8, im9), axis=0)
   lbig=np.concatenate((tl0[0:abj], tl1[0:abj], tl2[0:abj], tl3[0:abj], tl4[0:abj], tl5[0:abj], tl6[0:abj], tl7[0:abj], tl8[0:abj], tl9[0:abj]), axis=0)
 
   x_nn01, y_nn01 = shuffle(np.array(big), np.array(lbig))
@@ -679,10 +683,10 @@ if __name__ == '__main__':
   dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
 
   big2=np.concatenate((tm0, tm1, tm2, tm3, tm4, tm5, tm6, tm7, tm8, tm9), axis=0)
-  lbig2=np.concatenate((el0, el1, el2, el3, el4, el5, el6, el7, el8, el9), axis=0)
+  lbig2=np.concatenate((el0[0:r], el1[0:r], el2[0:r], el3[0:r], el4[0:r], el5[0:r], el6[0:r], el7[0:r], el8[0:r], el9[0:r]), axis=0)
 
   x_nn02, y_nn02 = shuffle(np.array(big2), np.array(lbig2))
-  y_nn02=y_nn02.reshape(1000*10,)
+  y_nn02=y_nn02.reshape(r*10,)
   Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
   Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
   dataset2 = tf.data.Dataset.zip((Mydatasetx02, Mydatasety02))
