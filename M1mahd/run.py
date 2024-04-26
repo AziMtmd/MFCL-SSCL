@@ -52,7 +52,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -510,7 +510,7 @@ if __name__ == '__main__':
   elm0=yem[jdx00];elm1=yem[jdx11];elm2=yem[jdx22]; elm3=yem[jdx33];elm4=yem[jdx44];elm5=yem[jdx55]
   elm6=yem[jdx66];elm7=yem[jdx77];elm8=yem[jdx88]; elm9=yem[jdx99]
  
-  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=5000
+  height1=32; width1=32; ch1=3; height2=28; width2=28; m=0; abj=500
   
   im0=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im1=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
   im2=np.zeros((abj, 32+28+10, width1, ch1), np.uint8); im3=np.zeros((abj, 32+28+10, width1, ch1), np.uint8)
@@ -654,8 +654,9 @@ if __name__ == '__main__':
           if abj<1000:
             tm9[j][x, y, c]=ei9[j][x, y, c]
 
-  big=np.concatenate((im0[0:abj], im1[0:abj], im2[0:abj], im3[0:abj], im4[0:abj], im5[0:abj], im6[0:abj], im7[0:abj], im8[0:abj], im9[0:abj]), axis=0)
+  big=np.concatenate((im0, im1, im2, im3, im4, im5, im6, im7, im8, im9), axis=0)
   lbig=np.concatenate((tl0[0:abj], tl1[0:abj], tl2[0:abj], tl3[0:abj], tl4[0:abj], tl5[0:abj], tl6[0:abj], tl7[0:abj], tl8[0:abj], tl9[0:abj]), axis=0)
+
 
   x_nn01, y_nn01 = shuffle(np.array(big), np.array(lbig))
   y_nn01=y_nn01.reshape(abj*10,)
