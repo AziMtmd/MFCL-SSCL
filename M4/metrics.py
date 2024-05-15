@@ -35,6 +35,10 @@ def update_pretrain_metrics_train(contrast_loss, contrast_acc, contrast_entropy,
       tf.reduce_sum(prob_con * tf.math.log(prob_con + 1e-8), -1))
   contrast_entropy.update_state(entropy_con)
 
+def update_pretrain_metrics_train2(unsup_loss, loss):
+  """Updated pretraining metrics."""
+  unsup_loss.update_state(loss)
+
 
 def update_pretrain_metrics_eval(contrast_loss_metric,
                                  contrastive_top_1_accuracy_metric,
