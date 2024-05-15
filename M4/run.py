@@ -41,11 +41,11 @@ flags.DEFINE_bool('module1_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 200, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
+flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 1, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 1, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 1, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
@@ -57,7 +57,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -319,7 +319,7 @@ def main(argv):
   logging.info('# eval steps M1: %d', eval_steps)
 
   #M_1   
-  print('For Module 1:')  
+  print('********************** For Module 1 **********************')  
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -346,9 +346,7 @@ def main(argv):
   else:
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
-      # Build input pipeline.
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
-      # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
       FLAGS.optimizer='adam'
       optimizer_1 = model_lib.build_optimizer(0.001)
@@ -390,15 +388,13 @@ def main(argv):
         hdd, fea = model_1(features, training=True)
         # flops(model_1)
         loss = None
-        if hdd is not None:
-          outputs = hdd          
-          unsup_loss = obj_lib.add_usupervised_loss(fea, outputs)
+        if hdd is not None:       
+          unsup_loss = obj_lib.add_usupervised_loss(hdd, fea)
           if loss is None:
             loss = unsup_loss
           else:
             loss += unsup_loss          
-          # metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
-          #                                       con_loss, logits_con, labels_con)
+          metrics.update_pretrain_metrics_train2(unsupervised_loss_metric, unsup_loss)
         weight_decay = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -418,7 +414,7 @@ def main(argv):
         with tf.summary.record_if(should_record):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_2.iterations + 1)
         rep = model_1(features, training=False)
-        projection_head_outputs, supervised_head_outputs = model_2(rep, training=True)
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_2(rep, training=True)
         # flops(model_2)
         loss = None
         if projection_head_outputs is not None:
@@ -431,6 +427,19 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
+        
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+          
         weight_decay = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -453,7 +462,7 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_3.iterations + 1)
         rep = model_1(features, training=False)
         b = model_2(rep, training=False)
-        projection_head_outputs, supervised_head_outputs = model_3(b, training=True)
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_3(b, training=True)
         # flops(model_3)
         loss = None
         if projection_head_outputs is not None:
@@ -466,6 +475,19 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
+
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)        
+        
         weight_decay = model_lib.add_weight_decay(model_3, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -555,7 +577,7 @@ def main(argv):
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
-      logging.info('Training 1 complete...')    
+      logging.info('Training 1 complete...')   
 
 #M_2
     with strategy.scope():
@@ -566,6 +588,7 @@ def main(argv):
       logging.info('# epoch_steps M2: %d', epoch_steps_2)
       checkpoint_steps_2 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_2))    
       steps_per_loop_2 = checkpoint_steps_2
+      print('steps_per_loop_2', steps_per_loop_2)
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_2):
@@ -590,7 +613,7 @@ def main(argv):
           metric.reset_states()
       logging.info('Training 2 complete...')
 
-#M_3
+#M_3     
     with strategy.scope():
       FLAGS.train_epochs=FLAGS.m3_epoch
       train_steps_3 = model_lib.get_train_steps(num_train_examples) 
@@ -599,6 +622,7 @@ def main(argv):
       logging.info('# epoch_steps M3: %d', epoch_steps_3)
       checkpoint_steps_3 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))    
       steps_per_loop_3 = checkpoint_steps_3
+      print('steps_per_loop_3', steps_per_loop_3)
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_3):
@@ -643,6 +667,7 @@ def main(argv):
       
       global_step = optimizer.iterations
       cur_step = global_step.numpy()
+      print('steps_per_loop', steps_per_loop)
       iterator = iter(ds)
       while cur_step < train_steps:
         with summary_writer.as_default():
