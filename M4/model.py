@@ -254,7 +254,6 @@ class Decoder_1(tf.keras.layers.Layer):
     super(Decoder_1, self).__init__(**kwargs)
 
   def call(self, inputs, training):
-    print('inputs.shape', inputs.shape)
     if FLAGS.module1_train == False:
       return inputs  # directly use the output hiddens as hiddens
     if FLAGS.module1_train == True:
@@ -298,16 +297,11 @@ class Model(tf.keras.models.Model):
 
     # Add heads.
     projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training)
-
     if FLAGS.train_mode == 'finetune':
       supervised_head_outputs = self.supervised_head(supervised_head_inputs, training)
       return None, supervised_head_outputs
     elif FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
-      # When performing pretraining and linear evaluation together we do not
-      # want information from linear eval flowing back into pretraining network
-      # so we put a stop_gradient.
-      supervised_head_outputs = self.supervised_head(
-          tf.stop_gradient(supervised_head_inputs), training)
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)
       return projection_head_outputs, supervised_head_outputs
     else:
       return projection_head_outputs, None
@@ -339,27 +333,28 @@ class Module_1(tf.keras.models.Model):
     # Base network forward pass.
     hiddens = self.resnet_module_1(features, training=FLAGS.module1_train)
     if FLAGS.module1_train==True:
-      hiddens = self._decoder_1(hiddens, training=FLAGS.module1_train)
+      hiddens = self._decoder_1(hiddens, training=FLAGS.module1_train)  
       return hiddens, features
     else:
       return hiddens
 
 
 class Module_2(tf.keras.models.Model):
-
   def __init__(self, num_classes, **kwargs):
     super(Module_2, self).__init__(**kwargs)
     self.resnet_module_2 = resnet.resnet_2(resnet_depth=FLAGS.resnet_depth,
         width_multiplier=FLAGS.width_multiplier,cifar_stem=FLAGS.image_size <= 32)
     self._projection_head = ProjectionHead()
+    if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
+      self.supervised_head = SupervisedHead(num_classes)
 
   def __call__(self, inputs, training):
     features = inputs
     hiddens, conv = self.resnet_module_2(features, training=training)
-    # hiddens = self.resnet_module_2(features, training=training)
     if FLAGS.module2_train==True:
       projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training)
-      return projection_head_outputs, supervised_head_inputs
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)    
+      return projection_head_outputs, supervised_head_inputs, supervised_head_outputs
     else:
       return conv      
 
@@ -371,13 +366,16 @@ class Module_3(tf.keras.models.Model):
     self.resnet_module_3 = resnet.resnet_3(resnet_depth=FLAGS.resnet_depth,
         width_multiplier=FLAGS.width_multiplier,cifar_stem=FLAGS.image_size <= 32)
     self._projection_head = ProjectionHead()
+    if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
+      self.supervised_head = SupervisedHead(num_classes)
 
   def __call__(self, inputs, training):
     features = inputs
     hiddens, conv = self.resnet_module_3(features, training=training)
     if FLAGS.module3_train==True:
       projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training=training)
-      return projection_head_outputs, supervised_head_inputs
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)    
+      return projection_head_outputs, supervised_head_inputs, supervised_head_outputs
     else:
       return conv  
 
