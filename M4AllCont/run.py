@@ -33,6 +33,7 @@ import sys
 import tf_slim as slim
 from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+import pandas as pd
 
 FLAGS = flags.FLAGS
 
@@ -41,10 +42,10 @@ flags.DEFINE_bool('module1_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 200, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 200, 'Number of epochs to train for.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
@@ -57,7 +58,7 @@ flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size o
 flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
 flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
 flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
-flags.DEFINE_string('train_split', 'train[0:10000]', 'Split for training.')
+flags.DEFINE_string('train_split', 'train[0:5000]', 'Split for training.')
 flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
 flags.DEFINE_integer('eval_steps', 0, 'Number of steps to eval for. If not provided, evals over entire dataset.')
 flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
@@ -319,7 +320,7 @@ def main(argv):
   logging.info('# eval steps M1: %d', eval_steps)
 
   #M_1   
-  print('For Module 1:') 
+  print('********************** For Module 1 **********************')  
   train_steps_1 = model_lib.get_train_steps(num_train_examples) 
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
   logging.info('# train examples M1: %d', num_train_examples)
@@ -346,12 +347,12 @@ def main(argv):
   else:
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
-      # Build input pipeline.
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
-      # Build LR schedule and optimizer.
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
+      FLAGS.optimizer='adam'
+      optimizer_1 = model_lib.build_optimizer(0.001)
+      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
-      optimizer_1 = model_lib.build_optimizer(learning_rate)
       optimizer_2 = model_lib.build_optimizer(learning_rate)
       optimizer_3 = model_lib.build_optimizer(learning_rate)
       
@@ -385,29 +386,38 @@ def main(argv):
         with tf.summary.record_if(should_record):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
         
-        projection_head_outputs, supervised_head_outputs = model_1(features, training=True)
-        #flops(model_1)
-        loss = None
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_1(features, training=True)
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
           con_loss, logits_con, labels_con = obj_lib.add_contrastive_loss(
               outputs,hidden_norm=FLAGS.hidden_norm,temperature=FLAGS.temperature,strategy=strategy)
-        if loss is None:
-          loss = con_loss
-        else:
-          loss += con_loss
-        metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
+          loss=None
+          if loss is None:
+            loss = con_loss
+          else:
+            loss += con_loss
+          metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
         weight_decay = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************First module****************************')
-        # model_summary(model_1)
-        #logging.info('Trainable variables:')
-        #for var in model_1.trainable_variables:
-          #logging.info(var.name)
+        print('****************************for the first module****************************')
+        # logging.info('Trainable variables:')
+        # for var in model_1.trainable_variables:
+        #   logging.info(var.name)
         grads = tape.gradient(loss, model_1.trainable_variables)
         optimizer_1.apply_gradients(zip(grads, model_1.trainable_variables))
     
@@ -418,8 +428,8 @@ def main(argv):
         with tf.summary.record_if(should_record):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_2.iterations + 1)
         rep = model_1(features, training=False)
-        projection_head_outputs, supervised_head_outputs = model_2(rep, training=True)
-        #flops(model_2)
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_2(rep, training=True)
+        # flops(model_2)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -431,16 +441,28 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+
         weight_decay = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************Second module****************************')
+        print('****************************for the second module****************************')
         # model_summary(model_2)
-        #logging.info('Trainable variables:')
-        #for var in model_2.trainable_variables:
-          #logging.info(var.name)
+        # logging.info('Trainable variables:')
+        # for var in model_2.trainable_variables:
+        #   logging.info(var.name)
         grads = tape.gradient(loss, model_2.trainable_variables)
         optimizer_2.apply_gradients(zip(grads, model_2.trainable_variables))
 
@@ -453,8 +475,8 @@ def main(argv):
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_3.iterations + 1)
         rep = model_1(features, training=False)
         b = model_2(rep, training=False)
-        projection_head_outputs, supervised_head_outputs = model_3(b, training=True)
-        #flops(model_3)
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_3(b, training=True)
+        # flops(model_3)
         loss = None
         if projection_head_outputs is not None:
           outputs = projection_head_outputs
@@ -466,16 +488,28 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+
         weight_decay = model_lib.add_weight_decay(model_3, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
         loss = loss / strategy.num_replicas_in_sync
-        print('****************************Third module****************************')
+        print('****************************for the third module****************************')
         # model_summary(model_3)
-        #logging.info('Trainable variables:')
-        #for var in model_3.trainable_variables:
-          #logging.info(var.name)
+        # logging.info('Trainable variables:')
+        # for var in model_3.trainable_variables:
+        #   logging.info(var.name)
         grads = tape.gradient(loss, model_3.trainable_variables)
         optimizer_3.apply_gradients(zip(grads, model_3.trainable_variables))
 
@@ -520,10 +554,10 @@ def main(argv):
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
         total_loss_metric.update_state(loss)
-        loss = loss / strategy.num_replicas_in_sync
         # The default behavior of `apply_gradients` is to sum gradients from all
         # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
-        print('****************************Fourth module****************************')
+        loss = loss / strategy.num_replicas_in_sync
+        print('****************************for the fourth module****************************')
         #for var in model.trainable_variables:
          # logging.info(var.name)
         grads = tape.gradient(loss, model.trainable_variables)
@@ -531,6 +565,7 @@ def main(argv):
 
 # M_1
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_1):
@@ -550,15 +585,22 @@ def main(argv):
           cur_step_1 = global_step.numpy()
           checkpoint_manager_1.save(cur_step_1)
           logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
-      logging.info('Training 1 complete...')    
+      logging.info('Training 1 complete...')   
+    
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M1.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
 #M_2
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m2_epoch 
       train_steps_2 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -566,6 +608,7 @@ def main(argv):
       logging.info('# epoch_steps M2: %d', epoch_steps_2)
       checkpoint_steps_2 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_2))    
       steps_per_loop_2 = checkpoint_steps_2
+      print('steps_per_loop_2', steps_per_loop_2)
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_2):
@@ -583,15 +626,21 @@ def main(argv):
           cur_step_2 = global_step.numpy()
           checkpoint_manager_2.save(cur_step_2)
           logging.info('Completed: %d / %d steps', cur_step_2, train_steps_2)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_2)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_2)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 2 complete...')
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M2.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
-#M_3
+#M_3     
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m3_epoch
       train_steps_3 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -599,6 +648,7 @@ def main(argv):
       logging.info('# epoch_steps M3: %d', epoch_steps_3)
       checkpoint_steps_3 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_3))    
       steps_per_loop_3 = checkpoint_steps_3
+      print('steps_per_loop_3', steps_per_loop_3)
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_3):
@@ -616,15 +666,21 @@ def main(argv):
           cur_step_3 = global_step.numpy()
           checkpoint_manager_3.save(cur_step_3)
           logging.info('Completed: %d / %d steps', cur_step_3, train_steps_3)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 3 complete...')
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M3.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
 #M_4
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m4_epoch
       train_steps = model_lib.get_train_steps(num_train_examples) 
       epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -643,6 +699,7 @@ def main(argv):
       
       global_step = optimizer.iterations
       cur_step = global_step.numpy()
+      print('steps_per_loop', steps_per_loop)
       iterator = iter(ds)
       while cur_step < train_steps:
         with summary_writer.as_default():
@@ -650,13 +707,18 @@ def main(argv):
           cur_step = global_step.numpy()
           checkpoint_manager.save(cur_step)
           logging.info('Completed: %d / %d steps', cur_step, train_steps)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 4 complete...')
 
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M4.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
     if FLAGS.mode == 'train_then_eval':
       perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps,
                         checkpoint_manager.latest_checkpoint, strategy,topology)
