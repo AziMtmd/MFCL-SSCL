@@ -19,7 +19,6 @@ from absl import logging
 
 import tensorflow.compat.v2 as tf
 
-
 def update_pretrain_metrics_train(contrast_loss, contrast_acc, contrast_entropy,
                                   loss, logits_con, labels_con):
   """Updated pretraining metrics."""
@@ -34,6 +33,10 @@ def update_pretrain_metrics_train(contrast_loss, contrast_acc, contrast_entropy,
   entropy_con = -tf.reduce_mean(
       tf.reduce_sum(prob_con * tf.math.log(prob_con + 1e-8), -1))
   contrast_entropy.update_state(entropy_con)
+
+def update_pretrain_metrics_train2(unsup_loss, loss):
+  """Updated pretraining metrics."""
+  unsup_loss.update_state(loss)
 
 
 def update_pretrain_metrics_eval(contrast_loss_metric,
@@ -68,7 +71,12 @@ def _float_metric_value(metric):
 
 
 def log_and_write_metrics_to_summary(all_metrics, global_step):
+  a=[0]*15
+  i=0
   for metric in all_metrics:
     metric_value = _float_metric_value(metric)
     logging.info('Step: [%d] %s = %f', global_step, metric.name, metric_value)
     tf.summary.scalar(metric.name, metric_value, step=global_step)
+    a[i]=metric_value
+    i=i+1
+  return a
