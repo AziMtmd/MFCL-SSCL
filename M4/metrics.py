@@ -19,7 +19,6 @@ from absl import logging
 
 import tensorflow.compat.v2 as tf
 
-
 def update_pretrain_metrics_train(contrast_loss, contrast_acc, contrast_entropy,
                                   loss, logits_con, labels_con):
   """Updated pretraining metrics."""
@@ -72,7 +71,17 @@ def _float_metric_value(metric):
 
 
 def log_and_write_metrics_to_summary(all_metrics, global_step):
+  a=[0]*15
+  i=0
   for metric in all_metrics:
     metric_value = _float_metric_value(metric)
     logging.info('Step: [%d] %s = %f', global_step, metric.name, metric_value)
     tf.summary.scalar(metric.name, metric_value, step=global_step)
+    a[i]=metric_value
+    i=i+1
+  return a
+
+
+
+
+
