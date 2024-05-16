@@ -33,6 +33,7 @@ import sys
 import tf_slim as slim
 from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+import pandas as pd
 
 FLAGS = flags.FLAGS
 
@@ -41,11 +42,11 @@ flags.DEFINE_bool('module1_train', True, 'Training the first module')
 flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
-flags.DEFINE_integer('train_epochs', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_integer('m4_epoch', 1, 'Number of epochs to train for.')
-flags.DEFINE_float('warmup_epochs', 1, 'Number of epochs of warmup.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m2_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m3_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
 flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
 flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
@@ -388,8 +389,9 @@ def main(argv):
         hdd, fea = model_1(features, training=True)
         # flops(model_1)
         loss = None
-        if hdd is not None:       
-          unsup_loss = obj_lib.add_usupervised_loss(hdd, fea)
+        if hdd is not None:
+          outputs = hdd          
+          unsup_loss = obj_lib.add_usupervised_loss(fea, outputs)
           if loss is None:
             loss = unsup_loss
           else:
@@ -427,7 +429,6 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
-        
         if supervised_head_outputs is not None:
           outputs = supervised_head_outputs
           l = labels['labels']
@@ -439,7 +440,7 @@ def main(argv):
           else:
             loss += sup_loss
           metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
-          
+
         weight_decay = model_lib.add_weight_decay(model_2, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -475,7 +476,6 @@ def main(argv):
             loss += con_loss
           metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,contrast_entropy_metric,
                                                 con_loss, logits_con, labels_con)
-
         if supervised_head_outputs is not None:
           outputs = supervised_head_outputs
           l = labels['labels']
@@ -486,8 +486,8 @@ def main(argv):
             loss = sup_loss
           else:
             loss += sup_loss
-          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)        
-        
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+
         weight_decay = model_lib.add_weight_decay(model_3, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
@@ -553,6 +553,7 @@ def main(argv):
 
 # M_1
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       @tf.function
       def train_multiple_steps(iterator):
         for _ in tf.range(steps_per_loop_1):
@@ -572,15 +573,22 @@ def main(argv):
           cur_step_1 = global_step.numpy()
           checkpoint_manager_1.save(cur_step_1)
           logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 1 complete...')   
+    
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M1.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
 #M_2
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m2_epoch 
       train_steps_2 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_2 = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -606,15 +614,21 @@ def main(argv):
           cur_step_2 = global_step.numpy()
           checkpoint_manager_2.save(cur_step_2)
           logging.info('Completed: %d / %d steps', cur_step_2, train_steps_2)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_2)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_2)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 2 complete...')
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M2.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
 #M_3     
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m3_epoch
       train_steps_3 = model_lib.get_train_steps(num_train_examples) 
       epoch_steps_3 = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -640,15 +654,21 @@ def main(argv):
           cur_step_3 = global_step.numpy()
           checkpoint_manager_3.save(cur_step_3)
           logging.info('Completed: %d / %d steps', cur_step_3, train_steps_3)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_3)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 3 complete...')
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M3.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
 
 #M_4
     with strategy.scope():
+      g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
       FLAGS.train_epochs=FLAGS.m4_epoch
       train_steps = model_lib.get_train_steps(num_train_examples) 
       epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
@@ -675,13 +695,18 @@ def main(argv):
           cur_step = global_step.numpy()
           checkpoint_manager.save(cur_step)
           logging.info('Completed: %d / %d steps', cur_step, train_steps)
-          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+          glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+          g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+          g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
           tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
           summary_writer.flush()
         for metric in all_metrics:
           metric.reset_states()
       logging.info('Training 4 complete...')
 
+    report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+    filename = "M4.xlsx"
+    pd.DataFrame(report).to_excel(filename, header=False, index=False)
     if FLAGS.mode == 'train_then_eval':
       perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps,
                         checkpoint_manager.latest_checkpoint, strategy,topology)
