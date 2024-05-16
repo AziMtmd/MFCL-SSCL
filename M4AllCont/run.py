@@ -229,6 +229,7 @@ def perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps, ck
     regularization_loss.update_state(reg_loss)
 
   with strategy.scope():
+    g1=[]; g2=[]; g3=[]; g4=[]; g5=[]; g6=[]; g7=[]; g8=[]; g9=[]
     @tf.function
     def run_single_step(iterator):
       images, labels = next(iterator)
@@ -245,9 +246,14 @@ def perform_evaluation(model, model_1, model_2, model_3, builder, eval_steps, ck
   cur_step = global_step.numpy()
   logging.info('Writing summaries for %d step', cur_step)
   with summary_writer.as_default():
-    metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+    glb=metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+    g1.append(glb[0]); g2.append(glb[1]); g3.append(glb[2]); g4.append(glb[3]); g5.append(glb[4]); g6.append(glb[5])
+    g7.append(glb[6]); g8.append(glb[7]); g9.append(glb[8])
     summary_writer.flush()
-
+  report=zip(g1, g2, g3, g4, g5, g6, g7, g8, g9)
+  filename = "MN.xlsx"
+  pd.DataFrame(report).to_excel(filename, header=False, index=False)
+    
   # Record results as JSON.
   result_json_path = os.path.join(FLAGS.model_dir, 'result.json')
   result = {metric.name: metric.result().numpy() for metric in all_metrics}
