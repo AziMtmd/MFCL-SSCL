@@ -354,12 +354,12 @@ def main(argv):
     with strategy.scope():
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
-      FLAGS.optimizer='adam'
-      optimizer_1 = model_lib.build_optimizer(0.001)
+      # FLAGS.optimizer='adam'
+      # optimizer_1 = model_lib.build_optimizer(0.001)
       FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
-      optimizer_2 = model_lib.build_optimizer(learning_rate)
-      optimizer_3 = model_lib.build_optimizer(learning_rate)
+      optimizer_1 = model_lib.build_optimizer(learning_rate)
+      # optimizer_3 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
@@ -387,19 +387,33 @@ def main(argv):
       with tf.GradientTape() as tape:
         should_record = tf.equal((optimizer_1.iterations + 1) % steps_per_loop_1, 0)
         with tf.summary.record_if(should_record):
+          # Only log augmented images for the first tower.
           tf.summary.image('image', features[:, :, :, :3], step=optimizer_1.iterations + 1)
-        
-        hdd, fea = model_1(features, training=True)
-        # flops(model_1)
+
+        projection_head_outputs, supervised_head_inputs, supervised_head_outputs = model_1(features, training=True)
+        #flops(model)
         loss = None
-        if hdd is not None:
-          outputs = hdd          
-          unsup_loss = obj_lib.add_usupervised_loss(fea, outputs)
+        if projection_head_outputs is not None:
+          outputs = projection_head_outputs
+          con_loss, logits_con, labels_con = obj_lib.add_contrastive_loss(
+              outputs,hidden_norm=FLAGS.hidden_norm,temperature=FLAGS.temperature,strategy=strategy)
           if loss is None:
-            loss = unsup_loss
+            loss = con_loss
           else:
-            loss += unsup_loss          
-          metrics.update_pretrain_metrics_train2(unsupervised_loss_metric, unsup_loss)
+            loss += con_loss
+          metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,
+                                                contrast_entropy_metric,con_loss, logits_con,labels_con)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
         weight_decay = model_lib.add_weight_decay(model_1, adjust_per_optimizer=True)
         weight_decay_metric.update_state(weight_decay)
         loss += weight_decay
