@@ -43,8 +43,6 @@ flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
 flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 100, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
