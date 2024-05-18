@@ -581,7 +581,7 @@ class Resnet_Module_1(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
               data_format=data_format,trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_conv', trainable=trainable))
       self.encoder.append(tfa.layers.GroupNormalization(axis = -1, trainable=trainable)) #GN2
-      self.encoder.append(BatchNormRelu(data_format=data_format, trainable=trainable))
+      # self.encoder.append(BatchNormRelu(data_format=data_format, trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_max_pool', trainable=trainable))
     
 
