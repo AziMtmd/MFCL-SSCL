@@ -338,8 +338,6 @@ def main(argv):
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
 
   with strategy.scope():
-    # model_3 = model_lib.Module_3(num_classes)
-    # model_2 = model_lib.Module_2(num_classes)
     model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
@@ -358,8 +356,6 @@ def main(argv):
       optimizer_1 = model_lib.build_optimizer(0.001)
       FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
-      optimizer_2 = model_lib.build_optimizer(learning_rate)
-      optimizer_3 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
