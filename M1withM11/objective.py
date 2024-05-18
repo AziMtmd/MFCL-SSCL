@@ -34,10 +34,10 @@ def add_supervised_loss(labels, logits):
 
 def add_usupervised_loss(labels, logits):
   """Compute mean supervised loss over local batch."""
-  # losses = tf.keras.losses.binary_crossentropy(labels, logits)
-  losses = tf.keras.losses.MeanSquaredError(
-    reduction=tf.keras.losses.Reduction.SUM,
-    name='mean_squared_error')(labels, logits)
+  losses = tf.keras.losses.binary_crossentropy(labels, logits)
+  #losses = tf.keras.losses.MeanSquaredError(
+   # reduction=tf.keras.losses.Reduction.SUM,
+  #  name='mean_squared_error')(labels, logits)
   return tf.reduce_mean(losses)
 
 
