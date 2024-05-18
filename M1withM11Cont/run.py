@@ -43,8 +43,6 @@ flags.DEFINE_bool('module2_train', True, 'Training the second module')
 flags.DEFINE_bool('module3_train', True, 'Training the second module')
 
 flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
-flags.DEFINE_integer('m2_epoch', 100, 'Number of epochs to train for.')
-flags.DEFINE_integer('m3_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_integer('m4_epoch', 100, 'Number of epochs to train for.')
 flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
 
@@ -338,8 +336,6 @@ def main(argv):
   logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
 
   with strategy.scope():
-    # model_3 = model_lib.Module_3(num_classes)
-    # model_2 = model_lib.Module_2(num_classes)
     model_1 = model_lib.Module_1(num_classes)
     model = model_lib.Model(num_classes)
 
@@ -354,12 +350,9 @@ def main(argv):
     with strategy.scope():
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
-      # FLAGS.optimizer='adam'
-      # optimizer_1 = model_lib.build_optimizer(0.001)
       FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
       optimizer_1 = model_lib.build_optimizer(learning_rate)
-      # optimizer_3 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
