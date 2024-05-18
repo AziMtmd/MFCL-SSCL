@@ -341,7 +341,7 @@ class SE_Layer(tf.keras.layers.Layer):  # pylint: disable=invalid-name
     se_tensor = self.se_expand(tf.nn.relu(self.se_reduce(se_tensor)))
     return tf.sigmoid(se_tensor) * inputs
 
-    
+
 class ResidualBlock(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
   def __init__(self,
@@ -579,56 +579,24 @@ class Resnet_Module_1(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
       self.encoder.append(Conv2dFixedPadding(filters=64 * width_multiplier,kernel_size=3,strides=1,
               data_format=data_format,trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_conv', trainable=trainable))
+      # self.encoder.append(tfa.layers.GroupNormalization(axis = -1, trainable=trainable)) #GN2
       self.encoder.append(BatchNormRelu(data_format=data_format, trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_max_pool', trainable=trainable))
+    
+
 
   def call(self, inputs, training):
     for layer in self.encoder:
-      inputs = layer(inputs, training=FLAGS.module1_train)
-
-    return inputs
-
-
-class Resnet_Module_2(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
-  
-  def __init__(self,
-               block_fn,
-               layers,
-               width_multiplier,
-               cifar_stem=True,
-               data_format='channels_last',
-               dropblock_keep_probs=None,
-               dropblock_size=None,
-               **kwargs):
-    super(Resnet_Module_2, self).__init__(**kwargs)
-    self.data_format = data_format
-    if dropblock_keep_probs is None:
-      dropblock_keep_probs = [None] * 4
-    if not isinstance(dropblock_keep_probs,list) or len(dropblock_keep_probs) != 4:
-      raise ValueError('dropblock_keep_probs is not valid:',dropblock_keep_probs)
-    
-    trainable=True
-    self.block_groups2 = []
-    self.block_groups2.append(BlockGroup(filters=64 * width_multiplier,block_fn=block_fn,
-            blocks=layers[0],strides=1,name='block_group1',data_format=data_format,
-            dropblock_keep_prob=dropblock_keep_probs[0],dropblock_size=dropblock_size,trainable=trainable))
-    self.block_groups2.append(BlockGroup(filters=128 * width_multiplier,block_fn=block_fn,
-            blocks=layers[1],strides=2,name='block_group2', data_format=data_format,
-            dropblock_keep_prob=dropblock_keep_probs[1],dropblock_size=dropblock_size,trainable=trainable))
-  
-  def call(self, inputs, training):
-    for i, layer in enumerate(self.block_groups2):
-      # if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
-      #   inputs = tf.stop_gradient(inputs)
-      if FLAGS.module2_train==True:        
-        inputs = layer(inputs, training=FLAGS.module2_train)
-    convrep=inputs
-    if self.data_format == 'channels_last':
-      inputs = tf.reduce_mean(inputs, [1, 2])
-    else:
-      inputs = tf.reduce_mean(inputs, [2, 3])
+      inputs = layer(inputs, training=training)
+    print('inputs3.shape', inputs.shape)
+    if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 4:
+      inputs = tf.stop_gradient(inputs)
+    # if self.data_format == 'channels_last':
+    #   inputs = tf.reduce_mean(inputs, [1, 2])
+    # else:
+    #   inputs = tf.reduce_mean(inputs, [2, 3])
     inputs = tf.identity(inputs, 'final_avg_pool')
-    return inputs, convrep
+    return inputs
 
 
 class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
@@ -649,77 +617,17 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
     if not isinstance(dropblock_keep_probs,list) or len(dropblock_keep_probs) != 4:
       raise ValueError('dropblock_keep_probs is not valid:', dropblock_keep_probs)
     trainable = (FLAGS.train_mode != 'finetune' or FLAGS.fine_tune_after_block == -1)
-    self.initial_conv_relu_max_pool = []
-    print('cifar_stem......', cifar_stem)
 
+    trainable=True   
+    self.encoder = []
     if cifar_stem:
-      self.initial_conv_relu_max_pool.append(
-          Conv2dFixedPadding(
-              filters=64 * width_multiplier,
-              kernel_size=3,
-              strides=1,
-              data_format=data_format,
-              trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_conv', trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          BatchNormRelu(data_format=data_format, trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_max_pool', trainable=trainable))
-    else:
-      if FLAGS.sk_ratio > 0:  # Use ResNet-D (https://arxiv.org/abs/1812.01187)
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier // 2,
-                kernel_size=3,
-                strides=2,
-                data_format=data_format,
-                trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            BatchNormRelu(data_format=data_format, trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier // 2,
-                kernel_size=3,
-                strides=1,
-                data_format=data_format,
-                trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            BatchNormRelu(data_format=data_format, trainable=trainable))
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier,
-                kernel_size=3,
-                strides=1,
-                data_format=data_format,
-                trainable=trainable))
-      else:
-        self.initial_conv_relu_max_pool.append(
-            Conv2dFixedPadding(
-                filters=64 * width_multiplier,
-                kernel_size=7,
-                strides=2,
-                data_format=data_format,
-                trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_conv', trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          BatchNormRelu(data_format=data_format, trainable=trainable))
-
-      self.initial_conv_relu_max_pool.append(
-          tf.keras.layers.MaxPooling2D(
-              pool_size=3,
-              strides=2,
-              padding='SAME',
-              data_format=data_format,
-              trainable=trainable))
-      self.initial_conv_relu_max_pool.append(
-          IdentityLayer(name='initial_max_pool', trainable=trainable))
-
+      self.encoder.append(Conv2dFixedPadding(filters=64 * width_multiplier,kernel_size=3,strides=1,
+              data_format=data_format,trainable=trainable))
+      self.encoder.append(IdentityLayer(name='initial_conv', trainable=trainable))
+      # self.encoder.append(tfa.layers.GroupNormalization(axis = -1, trainable=trainable)) #GN2
+      self.encoder.append(BatchNormRelu(data_format=data_format, trainable=trainable))
+      self.encoder.append(IdentityLayer(name='initial_max_pool', trainable=trainable))
     self.block_groups = []
-    # TODO(srbs): This impl is different from the original one in the case where
-    # fine_tune_after_block != 4. In that case earlier BN stats were getting
-    # updated. Now they will not be. Check with Ting to make sure this is ok.
     if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 0:
       trainable = True
 
@@ -735,31 +643,16 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
             dropblock_size=dropblock_size,
             trainable=trainable))
 
-    if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 1:
-      trainable = True
-
-    self.block_groups.append(
-        BlockGroup(
-            filters=128 * width_multiplier,
-            block_fn=block_fn,
-            blocks=layers[1],
-            strides=2,
-            name='block_group2',
-            data_format=data_format,
-            dropblock_keep_prob=dropblock_keep_probs[1],
-            dropblock_size=dropblock_size,
-            trainable=trainable))
-
-    if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 2:
-      trainable = True
-
+    trainable=True
+    self.block_groups.append(BlockGroup(filters=128 * width_multiplier,block_fn=block_fn,
+            blocks=layers[1],strides=2,name='block_group2', data_format=data_format,
+            dropblock_keep_prob=dropblock_keep_probs[1],dropblock_size=dropblock_size,trainable=trainable))
+  
     self.block_groups.append(BlockGroup(filters=256 * width_multiplier,block_fn=block_fn,
             blocks=layers[2],strides=2,name='block_group3',data_format=data_format,
             dropblock_keep_prob=dropblock_keep_probs[2],dropblock_size=dropblock_size,trainable=trainable))
 
-    if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 3:
-      trainable = True
-
+    
     self.block_groups.append(BlockGroup(filters=512 * width_multiplier,block_fn=block_fn,
             blocks=layers[3],strides=2,name='block_group4',data_format=data_format,
             dropblock_keep_prob=dropblock_keep_probs[3],dropblock_size=dropblock_size,trainable=trainable))
@@ -769,7 +662,7 @@ class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
       trainable = True
 
   def call(self, inputs, training):
-    for layer in self.initial_conv_relu_max_pool:
+    for layer in self.encoder:
       inputs = layer(inputs, training=training)
     for i, layer in enumerate(self.block_groups):
       if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == i:
@@ -821,81 +714,4 @@ def resnet(resnet_depth,width_multiplier,cifar_stem=True, data_format='channels_
   params = model_params[resnet_depth]
   return Resnet(params['block'],params['layers'],width_multiplier,cifar_stem=cifar_stem,
       dropblock_keep_probs=dropblock_keep_probs,dropblock_size=dropblock_size,data_format=data_format)
-
-
-def resnet_1(resnet_depth,width_multiplier,cifar_stem=True,data_format='channels_last',
-            dropblock_keep_probs=None,dropblock_size=None):
-  """Returns the ResNet model for a given size and number of output classes."""
-  model_params = {
-      18: {
-          'block': ResidualBlock,
-          'layers': [2, 2, 2, 2]
-      },
-      34: {
-          'block': ResidualBlock,
-          'layers': [3, 4, 6, 3]
-      },
-      50: {
-          'block': BottleneckBlock,
-          'layers': [3, 4, 6, 3]
-      },
-      101: {
-          'block': BottleneckBlock,
-          'layers': [3, 4, 23, 3]
-      },
-      152: {
-          'block': BottleneckBlock,
-          'layers': [3, 8, 36, 3]
-      },
-      200: {
-          'block': BottleneckBlock,
-          'layers': [3, 24, 36, 3]
-      }
-  }
-  if resnet_depth not in model_params:
-    raise ValueError('Not a valid resnet_depth:', resnet_depth)
-
-  params = model_params[resnet_depth]
-  return Resnet_Module_1(params['block'],params['layers'],width_multiplier,cifar_stem=cifar_stem,
-      dropblock_keep_probs=dropblock_keep_probs,dropblock_size=dropblock_size,data_format=data_format)
-
-
-def resnet_2(resnet_depth,width_multiplier,cifar_stem=True,data_format='channels_last',
-           dropblock_keep_probs=None,dropblock_size=None):
-  """Returns the ResNet model for a given size and number of output classes."""
-  model_params = {
-      18: {
-          'block': ResidualBlock,
-          'layers': [2, 2, 2, 2]
-      },
-      34: {
-          'block': ResidualBlock,
-          'layers': [3, 4, 6, 3]
-      },
-      50: {
-          'block': BottleneckBlock,
-          'layers': [3, 4, 6, 3]
-      },
-      101: {
-          'block': BottleneckBlock,
-          'layers': [3, 4, 23, 3]
-      },
-      152: {
-          'block': BottleneckBlock,
-          'layers': [3, 8, 36, 3]
-      },
-      200: {
-          'block': BottleneckBlock,
-          'layers': [3, 24, 36, 3]
-      }
-  }
-  if resnet_depth not in model_params:
-    raise ValueError('Not a valid resnet_depth:', resnet_depth)
-
-  params = model_params[resnet_depth]
-  return Resnet_Module_2(params['block'],params['layers'],width_multiplier,cifar_stem=cifar_stem,
-      dropblock_keep_probs=dropblock_keep_probs,dropblock_size=dropblock_size,data_format=data_format)
-
-
-
 
