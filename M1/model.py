@@ -215,23 +215,50 @@ class ProjectionHead(tf.keras.layers.Layer):
 class Decoder_1(tf.keras.layers.Layer):
 
   def __init__(self, **kwargs):
-    self.initial_conv_relu_max_pool=[]
-    self.initial_conv_relu_max_pool.append(MaxPool2D())
-    self.initial_conv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train)) 
-    self.initial_conv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=2,strides=(2,2),
+    self.initial_dconv_relu_max_pool=[]
+    self.initial_dconv_relu_max_pool.append(MaxPool2D(pool_size=(3, 3),padding='same'))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train)) 
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=2,
             data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
-    self.initial_conv_relu_max_pool.append(Conv2DTranspose(filters=3 * FLAGS.width_multiplier,kernel_size=1,strides=1,
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
+
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
             data_format='channels_last',trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
+
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
+            data_format='channels_last',trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))  
+
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
+            data_format='channels_last',trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))    
+  
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
+            data_format='channels_last',trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
+    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))  
+
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=3 * FLAGS.width_multiplier,kernel_size=2,strides=1,
+            data_format='channels_last',trainable=FLAGS.module1_train))
+
     super(Decoder_1, self).__init__(**kwargs)
 
   def call(self, inputs, training):
+    print('inputs.shape', inputs.shape)
     if FLAGS.module1_train == False:
       return inputs  # directly use the output hiddens as hiddens
     if FLAGS.module1_train == True:
-      for layer in self.initial_conv_relu_max_pool:
+      for layer in self.initial_dconv_relu_max_pool:
         inputs = layer(inputs, training=FLAGS.module1_train)
         inputs = tf.identity(inputs, name='logits_sup')
       return inputs
@@ -273,21 +300,18 @@ class Model(tf.keras.models.Model):
     num_transforms = inputs.shape[3] // 3
     num_transforms = tf.repeat(3, num_transforms)
     # Split channels, and optionally apply extra batched augmentation.
-    features_list = tf.split(
-        features, num_or_size_splits=num_transforms, axis=-1)
+    features_list = tf.split(features, num_or_size_splits=num_transforms, axis=-1)
     if FLAGS.use_blur and training and FLAGS.train_mode == 'pretrain':
-      features_list = data_util.batch_random_blur(features_list,
-                                                  FLAGS.image_size,
-                                                  FLAGS.image_size)
+      features_list = data_util.batch_random_blur(features_list, FLAGS.image_size, FLAGS.image_size)
     features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
     # Base network forward pass.
     hiddens = self.resnet_model(features, training=training)
+
     # Add heads.
-    projection_head_outputs, supervised_head_inputs = self._projection_head(
-        hiddens, training)
+    projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training)
+
     if FLAGS.train_mode == 'finetune':
-      supervised_head_outputs = self.supervised_head(supervised_head_inputs,
-                                                     training)
+      supervised_head_outputs = self.supervised_head(supervised_head_inputs, training)
       return None, supervised_head_outputs
     elif FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
       # When performing pretraining and linear evaluation together we do not
@@ -301,7 +325,6 @@ class Model(tf.keras.models.Model):
 
 
 class Module_1(tf.keras.models.Model):
-
   def __init__(self, num_classes, **kwargs):
     super(Module_1, self).__init__(**kwargs)
     self.resnet_module_1 = resnet.resnet_1(resnet_depth=FLAGS.resnet_depth,
@@ -331,7 +354,8 @@ class Module_1(tf.keras.models.Model):
       return hiddens, features
     else:
       return hiddens
- 
+
+
 class Module_2(tf.keras.models.Model):
 
   def __init__(self, num_classes, **kwargs):
@@ -339,15 +363,39 @@ class Module_2(tf.keras.models.Model):
     self.resnet_module_2 = resnet.resnet_2(resnet_depth=FLAGS.resnet_depth,
         width_multiplier=FLAGS.width_multiplier,cifar_stem=FLAGS.image_size <= 32)
     self._projection_head = ProjectionHead()
+    self.supervised_head = SupervisedHead(num_classes)
 
   def __call__(self, inputs, training):
     features = inputs
     hiddens, conv = self.resnet_module_2(features, training=training)
+    # hiddens = self.resnet_module_2(features, training=training)
     if FLAGS.module2_train==True:
-      projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, FLAGS.module2_train)
-      return projection_head_outputs, supervised_head_inputs
+      projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training)
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)
+      return projection_head_outputs, supervised_head_inputs, supervised_head_outputs
     else:
-      return hiddens, conv      
+      return conv      
+
+
+class Module_3(tf.keras.models.Model):
+
+  def __init__(self, num_classes, **kwargs):
+    super(Module_3, self).__init__(**kwargs)
+    self.resnet_module_3 = resnet.resnet_3(resnet_depth=FLAGS.resnet_depth,
+        width_multiplier=FLAGS.width_multiplier,cifar_stem=FLAGS.image_size <= 32)
+    self._projection_head = ProjectionHead()
+    self.supervised_head = SupervisedHead(num_classes)
+
+  def __call__(self, inputs, training):
+    features = inputs
+    hiddens, conv = self.resnet_module_3(features, training=training)
+    if FLAGS.module3_train==True:
+      projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training=training)
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)
+      return projection_head_outputs, supervised_head_inputs, supervised_head_outputs
+    else:
+      return conv  
+
 
 
 
