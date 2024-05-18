@@ -23,7 +23,7 @@ Residual networks (ResNets) were proposed in:
 from absl import flags
 import tensorflow.compat.v2 as tf
 from tensorflow.keras.layers import Conv2DTranspose, MaxPool2D
-import tensorflow_addons as tfa
+# import tensorflow_addons as tfa
 
 
 FLAGS = flags.FLAGS
@@ -580,24 +580,23 @@ class Resnet_Module_1(tf.keras.layers.Layer):  # pylint: disable=missing-docstri
       self.encoder.append(Conv2dFixedPadding(filters=64 * width_multiplier,kernel_size=3,strides=1,
               data_format=data_format,trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_conv', trainable=trainable))
-      self.encoder.append(tfa.layers.GroupNormalization(axis = -1, trainable=trainable)) #GN2
+      # self.encoder.append(tfa.layers.GroupNormalization(axis = -1, trainable=trainable)) #GN2
       self.encoder.append(BatchNormRelu(data_format=data_format, trainable=trainable))
       self.encoder.append(IdentityLayer(name='initial_max_pool', trainable=trainable))
     
-
-
   def call(self, inputs, training):
     for layer in self.encoder:
       inputs = layer(inputs, training=training)
     print('inputs3.shape', inputs.shape)
     if FLAGS.train_mode == 'finetune' and FLAGS.fine_tune_after_block == 4:
       inputs = tf.stop_gradient(inputs)
-    # if self.data_format == 'channels_last':
-    #   inputs = tf.reduce_mean(inputs, [1, 2])
-    # else:
-    #   inputs = tf.reduce_mean(inputs, [2, 3])
+    convrep=inputs
+    if self.data_format == 'channels_last':
+      inputs = tf.reduce_mean(inputs, [1, 2])
+    else:
+      inputs = tf.reduce_mean(inputs, [2, 3])
     inputs = tf.identity(inputs, 'final_avg_pool')
-    return inputs
+    return inputs, convrep
 
 class Resnet(tf.keras.layers.Layer):  # pylint: disable=missing-docstring
 
