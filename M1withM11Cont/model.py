@@ -318,7 +318,9 @@ class Module_1(tf.keras.models.Model):
     super(Module_1, self).__init__(**kwargs)
     self.resnet_module_1 = resnet.resnet_1(resnet_depth=FLAGS.resnet_depth,
         width_multiplier=FLAGS.width_multiplier,cifar_stem=FLAGS.image_size <= 32)
-    self._decoder_1= Decoder_1()
+    self._projection_head = ProjectionHead()
+    if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
+      self.supervised_head = SupervisedHead(num_classes)
 
   def __call__(self, inputs, training):
     features = inputs
@@ -337,10 +339,11 @@ class Module_1(tf.keras.models.Model):
       features_list = data_util.batch_random_blur(features_list, FLAGS.image_size, FLAGS.image_size)
     features = tf.concat(features_list, 0)  # (num_transforms * bsz, h, w, c)
     # Base network forward pass.
-    hiddens = self.resnet_module_1(features, training=FLAGS.module1_train)
-    if FLAGS.module1_train==True:
-      hiddens = self._decoder_1(hiddens, training=FLAGS.module1_train)
-      return hiddens, features
-    else:
-      return hiddens
+    hiddens, conv = self.resnet_module_1(features, training=FLAGS.module1_train)
 
+    if FLAGS.module1_train==True:
+      projection_head_outputs, supervised_head_inputs = self._projection_head(hiddens, training)
+      supervised_head_outputs = self.supervised_head(tf.stop_gradient(supervised_head_inputs), training)
+      return projection_head_outputs, supervised_head_inputs, supervised_head_outputs
+    else:
+      return conv 
