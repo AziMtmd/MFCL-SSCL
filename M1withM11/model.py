@@ -22,6 +22,7 @@ import lars_optimizer
 import resnet
 import tensorflow.compat.v2 as tf
 from tensorflow.keras.layers import Conv2DTranspose, MaxPool2D
+import tensorflow_addons as tfa
 
 FLAGS = flags.FLAGS
 
@@ -216,39 +217,10 @@ class Decoder_1(tf.keras.layers.Layer):
 
   def __init__(self, **kwargs):
     self.initial_dconv_relu_max_pool=[]
-    self.initial_dconv_relu_max_pool.append(MaxPool2D(pool_size=(3, 3),padding='same'))
+    self.initial_dconv_relu_max_pool.append(MaxPool2D(pool_size=(2, 2),padding='same'))
     self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train)) 
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=2,
-            data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
-
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
-            data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))
-
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
-            data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))  
-
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
-            data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))    
-  
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=64 * FLAGS.width_multiplier,kernel_size=3,strides=1,
-            data_format='channels_last',trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_conv', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.BatchNormRelu(data_format='channels_last', trainable=FLAGS.module1_train))
-    self.initial_dconv_relu_max_pool.append(resnet.IdentityLayer(name='initial_max_pool', trainable=FLAGS.module1_train))  
-
-    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=3 * FLAGS.width_multiplier,kernel_size=2,strides=1,
+    self.initial_dconv_relu_max_pool.append(tfa.layers.GroupNormalization(axis = -1, trainable=True))
+    self.initial_dconv_relu_max_pool.append(Conv2DTranspose(filters=3 * FLAGS.width_multiplier,kernel_size=1,strides=(2,2),
             data_format='channels_last',trainable=FLAGS.module1_train))
 
     super(Decoder_1, self).__init__(**kwargs)
