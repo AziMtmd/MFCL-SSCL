@@ -72,8 +72,8 @@ flags.DEFINE_bool('zero_init_logits_layer', False,'If True, zero initialize laye
 flags.DEFINE_integer('fine_tune_after_block', -1,'The layers after which block that we will fine-tune. -1 means fine-tuning '
     'everything. 0 means fine-tuning after stem block. 4 means fine-tuning just the linear head.')
 flags.DEFINE_string('master', None,'Address/name of the TensorFlow master to use. By default, use an in-process master.')
-flags.DEFINE_string('model_dir', '/azi', 'Model directory for training.')
-flags.DEFINE_string('data_dir', '/azi', 'Directory where dataset is stored.')
+flags.DEFINE_string('model_dir', './azi', 'Model directory for training.')
+flags.DEFINE_string('data_dir', None, 'Directory where dataset is stored.')
 flags.DEFINE_enum('optimizer', 'lars', ['momentum', 'adam', 'lars'],'Optimizer to use.')
 flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
 flags.DEFINE_string('eval_name', None,'Name for eval.')
@@ -91,14 +91,6 @@ flags.DEFINE_float('se_ratio', 0.,'If it is bigger than 0, it will enable SE.')
 flags.DEFINE_float('color_jitter_strength', 1.0,'The strength of color jittering.')
 flags.DEFINE_boolean('use_blur', True,'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
-directory_path = "/azi2"
-os.makedirs(directory_path, exist_ok=True)
-
-directory_path = "/azi3"
-os.makedirs(directory_path, exist_ok=True)
-
-# Create the directory
-os.makedirs(directory_path, exist_ok=True)
 
 def normalize_image(img):
   grads_norm = img[:,:,0]+ img[:,:,1]+ img[:,:,2]
@@ -436,13 +428,13 @@ def model_summary(mdl):
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
-  builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
-  builder.download_and_prepare()
-  num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
-  num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
-  num_classes = builder.info.features['label'].num_classes
+  num_classes = 10
   eval_steps = FLAGS.eval_steps or int(
       math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+
+  num_train_examples = 50000
+  num_eval_examples = 10000
+
 
   train_steps_1 = model_lib.get_train_steps(num_train_examples)
   epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
