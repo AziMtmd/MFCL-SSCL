@@ -13,105 +13,684 @@
 # See the License for the specific simclr governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Data pipeline."""
+"""The main training pipeline."""
 
-import functools
+import json
+import math
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.utils import shuffle
+
+from absl import app
 from absl import flags
 from absl import logging
-
-import data_util
+import data as data_lib
+import metrics
+import model as model_lib
+import objective as obj_lib
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets as tfds
+import keras
+import sys
+import tf_slim as slim
+from tensorflow.python.profiler.model_analyzer import profile
+from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+import random
 
 FLAGS = flags.FLAGS
 
+flags.DEFINE_integer('train_batch_size', 128, 'Batch size for training.')
+flags.DEFINE_integer('train_epochs', 100, 'Number of epochs to train for.')
+flags.DEFINE_float('warmup_epochs', 10, 'Number of epochs of warmup.')
+flags.DEFINE_string('dataset', 'cifar10', 'Name of a dataset.')
+flags.DEFINE_integer('proj_out_dim', 128,'Number of head projection dimension.')
+flags.DEFINE_integer('num_proj_layers', 3,'Number of non-linear head layers.')
+flags.DEFINE_integer('resnet_depth', 18,'Depth of ResNet.')
+flags.DEFINE_integer('image_size', 32, 'Input image size.')
 
-def build_input_fn(builder, global_batch_size, topology, is_training):
-  """Build input function.
+flags.DEFINE_float('learning_rate', 1.5, 'Initial learning rate per batch size of 256.')
+flags.DEFINE_enum('learning_rate_scaling', 'linear', ['linear', 'sqrt'],'How to scale the learning rate as a function of batch size.')
+flags.DEFINE_float('weight_decay', 1e-6, 'Amount of weight decay to use.')
+flags.DEFINE_float('batch_norm_decay', 0.9, 'Batch norm decay parameter.')
+flags.DEFINE_string('train_split', 'train', 'Split for training.')
+flags.DEFINE_integer('train_steps', 0, 'Number of steps to train for. If provided, overrides train_epochs.')
+flags.DEFINE_integer('eval_steps', 1, 'Number of steps to eval for. If not provided, evals over entire dataset.')
+flags.DEFINE_integer('eval_batch_size', 256, 'Batch size for eval.')
+flags.DEFINE_integer('checkpoint_epochs', 1, 'Number of epochs between checkpoints/summaries.')
+flags.DEFINE_integer('checkpoint_steps', 0,'Number of steps between checkpoints/summaries. If provided, overrides checkpoint_epochs.')
+flags.DEFINE_string('eval_split', 'test', 'Split for evaluation.')
+flags.DEFINE_bool('cache_dataset', False, 'Whether to cache the entire dataset in memory. If the dataset is '
+    'ImageNet, this is a very bad idea, but for smaller datasets it can improve performance.')
+flags.DEFINE_enum('mode', 'train_then_eval', ['train', 'eval', 'train_then_eval'],'Whether to perform training or evaluation.')
+flags.DEFINE_enum('train_mode', 'pretrain', ['pretrain', 'finetune'],
+    'The train mode controls different objectives and trainable components.')
+flags.DEFINE_bool('lineareval_while_pretraining', True, 'Whether to finetune supervised head while pretraining.')
+flags.DEFINE_string('checkpoint', None,'Loading from the given checkpoint for fine-tuning if a finetuning '
+    'checkpoint does not already exist in model_dir.')
+flags.DEFINE_bool('zero_init_logits_layer', False,'If True, zero initialize layers after avg_pool for supervised learning.')
+flags.DEFINE_integer('fine_tune_after_block', -1,'The layers after which block that we will fine-tune. -1 means fine-tuning '
+    'everything. 0 means fine-tuning after stem block. 4 means fine-tuning just the linear head.')
+flags.DEFINE_string('master', None,'Address/name of the TensorFlow master to use. By default, use an in-process master.')
+flags.DEFINE_string('model_dir', '/azi', 'Model directory for training.')
+flags.DEFINE_string('data_dir', '/azi', 'Directory where dataset is stored.')
+flags.DEFINE_enum('optimizer', 'lars', ['momentum', 'adam', 'lars'],'Optimizer to use.')
+flags.DEFINE_float('momentum', 0.9,'Momentum parameter.')
+flags.DEFINE_string('eval_name', None,'Name for eval.')
+flags.DEFINE_integer('keep_checkpoint_max', 5,'Maximum number of checkpoints to keep.')
+flags.DEFINE_integer('keep_hub_module_max', 1,'Maximum number of Hub modules to keep.')
+flags.DEFINE_float('temperature', 0.3,'Temperature parameter for contrastive loss.')
+flags.DEFINE_boolean('hidden_norm', True,'Temperature parameter for contrastive loss.')
+flags.DEFINE_enum('proj_head_mode', 'nonlinear', ['none', 'linear', 'nonlinear'],'How the head projection is done.')
+flags.DEFINE_integer('ft_proj_selector', 0,'Which layer of the projection head to use during fine-tuning. '
+    '0 means no projection head, and -1 means the final layer.')
+flags.DEFINE_boolean('global_bn', True,'Whether to aggregate BN statistics across distributed cores.')
+flags.DEFINE_integer('width_multiplier', 1, 'Multiplier to change width of network.')
+flags.DEFINE_float('sk_ratio', 0.,'If it is bigger than 0, it will enable SK. Recommendation: 0.0625.')
+flags.DEFINE_float('se_ratio', 0.,'If it is bigger than 0, it will enable SE.')
+flags.DEFINE_float('color_jitter_strength', 1.0,'The strength of color jittering.')
+flags.DEFINE_boolean('use_blur', True,'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
+directory_path = "/azi2"
+os.makedirs(directory_path, exist_ok=True)
+
+directory_path = "/azi3"
+os.makedirs(directory_path, exist_ok=True)
+
+# Create the directory
+os.makedirs(directory_path, exist_ok=True)
+
+def normalize_image(img):
+  grads_norm = img[:,:,0]+ img[:,:,1]+ img[:,:,2]
+  grads_norm = (grads_norm - tf.reduce_min(grads_norm))/ (tf.reduce_max(grads_norm)- tf.reduce_min(grads_norm))
+  return grads_norm
+
+def plot_maps(i, img1, img2,vmin=0.3,vmax=0.7, mix_val=2):
+  f = plt.figure(figsize=(15,45))
+  plt.subplot(1,3,1)
+  plt.imshow(img1,vmin=vmin, vmax=vmax)
+  plt.axis("off")
+  plt.subplot(1,3,2)
+  plt.imshow(img2)
+  plt.axis("off")
+  plt.subplot(1,3,3)
+  plt.imshow(img1*mix_val+img2/mix_val)
+  plt.axis("off")    
+  plt.savefig('/azi/nik'+str(i))
+
+def plot_maps2(i, img1, img2,vmin=0.3,vmax=0.7, mix_val=2):
+  f = plt.figure(figsize=(15,45))
+  plt.subplot(1,3,1)
+  plt.imshow(img1,vmin=vmin, vmax=vmax)
+  plt.axis("off")
+  plt.subplot(1,3,2)
+  plt.imshow(img2)
+  plt.axis("off")
+  plt.subplot(1,3,3)
+  plt.imshow(img1*mix_val+img2/mix_val)
+  plt.axis("off")    
+  plt.savefig('/azi2/nik2'+str(i))
+
+def plot_maps3(i, img1, img2,vmin=0.3,vmax=0.7, mix_val=2):
+  f = plt.figure(figsize=(15,45))
+  plt.subplot(1,3,1)
+  plt.imshow(img1,vmin=vmin, vmax=vmax)
+  plt.axis("off")
+  plt.subplot(1,3,2)
+  plt.imshow(img2)
+  plt.axis("off")
+  plt.subplot(1,3,3)
+  plt.imshow(img1*mix_val+img2/mix_val)
+  plt.axis("off")    
+  plt.savefig('/azi3/nik3'+str(i))
+
+
+def get_salient_tensors_dict(include_projection_head):
+  """Returns a dictionary of tensors."""
+  graph = tf.compat.v1.get_default_graph()
+  result = {}
+  for i in range(1, 5):
+    result['block_group%d' % i] = graph.get_tensor_by_name('resnet/block_group%d/block_group%d:0' % (i, i))
+  result['initial_conv'] = graph.get_tensor_by_name('resnet/initial_conv/Identity:0')
+  result['initial_max_pool'] = graph.get_tensor_by_name('resnet/initial_max_pool/Identity:0')
+  result['final_avg_pool'] = graph.get_tensor_by_name('resnet/final_avg_pool:0')
+  result['logits_sup'] = graph.get_tensor_by_name('head_supervised/logits_sup:0')
+  if include_projection_head:
+    result['proj_head_input'] = graph.get_tensor_by_name('projection_head/proj_head_input:0')
+    result['proj_head_output'] = graph.get_tensor_by_name('projection_head/proj_head_output:0')
+  return result
+
+
+def flops(mrd):
+  session = tf.compat.v1.Session()
+  graph = tf.compat.v1.get_default_graph()
+  with graph.as_default():
+    with session.as_default():
+      run_meta = tf.compat.v1.RunMetadata()
+      opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
+      flops = tf.compat.v1.profiler.profile(graph=graph, run_meta=run_meta, cmd='op', options=opts)
+  return flops.total_float_ops
+
+
+def build_saved_model(model, include_projection_head=True):
+  """Returns a tf.Module for saving to SavedModel."""
+  class SimCLRModel(tf.Module):
+    """Saved model for exporting to hub."""
+    def __init__(self, model):
+      self.model = model
+      # This can't be called `trainable_variables` because `tf.Module` has a getter with the same name.
+      self.trainable_variables_list = model.trainable_variables
+    @tf.function
+    def __call__(self, inputs, trainable):
+      self.model(inputs, training=trainable)
+      return get_salient_tensors_dict(include_projection_head)
+  module = SimCLRModel(model)
+  input_spec = tf.TensorSpec(shape=[None, None, None, 3], dtype=tf.float32)
+  module.__call__.get_concrete_function(input_spec, trainable=True)
+  module.__call__.get_concrete_function(input_spec, trainable=False)
+  return module
+
+
+def save(model, global_step):
+  """Export as SavedModel for finetuning and inference."""
+  saved_model = build_saved_model(model)
+  export_dir = os.path.join(FLAGS.model_dir, 'saved_model')
+  checkpoint_export_dir = os.path.join(export_dir, str(global_step))
+  if tf.io.gfile.exists(checkpoint_export_dir):
+    tf.io.gfile.rmtree(checkpoint_export_dir)
+  tf.saved_model.save(saved_model, checkpoint_export_dir)
+  if FLAGS.keep_hub_module_max > 0:
+    # Delete old exported SavedModels.
+    exported_steps = []
+    for subdir in tf.io.gfile.listdir(export_dir):
+      if not subdir.isdigit():
+        continue
+      exported_steps.append(int(subdir))
+    exported_steps.sort()
+    for step_to_delete in exported_steps[:-FLAGS.keep_hub_module_max]:
+      tf.io.gfile.rmtree(os.path.join(export_dir, str(step_to_delete)))
+
+
+def try_restore_from_checkpoint(model, global_step, optimizer):
+  """Restores the latest ckpt if it exists, otherwise check FLAGS.checkpoint."""
+  checkpoint = tf.train.Checkpoint(model=model, global_step=global_step, optimizer=optimizer)
+  checkpoint_manager = tf.train.CheckpointManager(checkpoint,directory=FLAGS.model_dir,max_to_keep=FLAGS.keep_checkpoint_max)
+  latest_ckpt = checkpoint_manager.latest_checkpoint
+  if latest_ckpt:
+    # Restore model weights, global step, optimizer states
+    logging.info('Restoring from latest checkpoint: %s', latest_ckpt)
+    checkpoint_manager.checkpoint.restore(latest_ckpt).expect_partial()
+  elif FLAGS.checkpoint:
+    # Restore model weights only, but not global step and optimizer states
+    logging.info('Restoring from given checkpoint: %s', FLAGS.checkpoint)
+    checkpoint_manager2 = tf.train.CheckpointManager(tf.train.Checkpoint(model=model),
+        directory=FLAGS.model_dir,max_to_keep=FLAGS.keep_checkpoint_max)
+    checkpoint_manager2.checkpoint.restore(FLAGS.checkpoint).expect_partial()
+    if FLAGS.zero_init_logits_layer:
+      model = checkpoint_manager2.checkpoint.model
+      output_layer_parameters = model.supervised_head.trainable_weights
+      logging.info('Initializing output layer parameters %s to zero', [x.op.name for x in output_layer_parameters])
+      for x in output_layer_parameters:
+        x.assign(tf.zeros_like(x))
+  return checkpoint_manager
+
+
+def json_serializable(val):
+  try:
+    json.dumps(val)
+    return True
+  except TypeError:
+    return False
+
+
+def perform_evaluation(model, builder, builder2, builder3, eval_steps, ckpt, strategy, topology):
+  """Perform evaluation."""
+  if FLAGS.train_mode == 'pretrain' and not FLAGS.lineareval_while_pretraining:
+    logging.info('Skipping eval during pretraining without linear eval.')
+    return
+  # Build input pipeline.
+  ds = data_lib.build_distributed_dataset(builder, FLAGS.eval_batch_size, False, strategy, topology)
+  ds2 = data_lib.build_distributed_dataset(builder2, FLAGS.eval_batch_size, False, strategy, topology)
+  ds3 = data_lib.build_distributed_dataset(builder3, FLAGS.eval_batch_size, False, strategy, topology)
+
+  summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
+  # Build metrics.
+  with strategy.scope():
+    regularization_loss = tf.keras.metrics.Mean('eval/regularization_loss')
+    label_top_1_accuracy = tf.keras.metrics.Accuracy('eval/label_top_1_accuracy')
+    label_top_5_accuracy = tf.keras.metrics.TopKCategoricalAccuracy(5, 'eval/label_top_5_accuracy')
+    all_metrics = [regularization_loss, label_top_1_accuracy, label_top_5_accuracy]
+    # Restore checkpoint.
+    logging.info('Restoring from %s', ckpt)
+    checkpoint = tf.train.Checkpoint(model=model, global_step=tf.Variable(0, dtype=tf.int64))
+    checkpoint.restore(ckpt).expect_partial()
+    global_step = checkpoint.global_step
+    logging.info('Performing eval at step %d', global_step.numpy())
+
+  def single_step(features, labels):
+    plt.savefig('/azi/foo.png')
+    with tf.GradientTape() as saliency_tape:
+      saliency_tape.watch(features)
+      sp,supervised_head_outputs, msh = model(features, training=False)
+      saliency_tape.watch(msh)
+      log_prediction_proba = tf.math.log(tf.reduce_max(sp))
+      # print('log_prediction_proba.shape', log_prediction_proba.shape)
+      # print('log_prediction_proba', log_prediction_proba)
+    saliency = saliency_tape.gradient(sp, features)
+    # print('saliency', saliency.shape)
+    for i in range(10):
+      plot_maps(i, normalize_image(saliency[i]), normalize_image(features[i]))
+
+    assert supervised_head_outputs is not None
+    outputs = supervised_head_outputs
+    l = labels['labels']
+    metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
+    reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
+    regularization_loss.update_state(reg_loss)
+
+  def single_step2(features, labels):
+    plt.savefig('/azi2/foo2.png')
+    with tf.GradientTape() as saliency_tape:
+      saliency_tape.watch(features)
+      sp,supervised_head_outputs, msh = model(features, training=False)
+      saliency_tape.watch(msh)
+      log_prediction_proba = tf.math.log(tf.reduce_max(sp))
+      # print('log_prediction_proba.shape', log_prediction_proba.shape)
+      # print('log_prediction_proba', log_prediction_proba)
+    saliency = saliency_tape.gradient(sp, features)
+    # print('saliency', saliency.shape)
+    for i in range(10):
+      plot_maps2(i, normalize_image(saliency[i]), normalize_image(features[i]))
+
+    assert supervised_head_outputs is not None
+    outputs = supervised_head_outputs
+    l = labels['labels']
+    metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
+    reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
+    regularization_loss.update_state(reg_loss)
+
+  def single_step3(features, labels):
+    plt.savefig('/azi3/foo3.png')
+    with tf.GradientTape() as saliency_tape:
+      saliency_tape.watch(features)
+      sp,supervised_head_outputs, msh = model(features, training=False)
+      saliency_tape.watch(msh)
+      log_prediction_proba = tf.math.log(tf.reduce_max(sp))
+      # print('log_prediction_proba.shape', log_prediction_proba.shape)
+      # print('log_prediction_proba', log_prediction_proba)
+    saliency = saliency_tape.gradient(sp, features)
+    # print('saliency', saliency.shape)
+    for i in range(10):
+      plot_maps3(i, normalize_image(saliency[i]), normalize_image(features[i]))
+
+    assert supervised_head_outputs is not None
+    outputs = supervised_head_outputs
+    l = labels['labels']
+    metrics.update_finetune_metrics_eval(label_top_1_accuracy,label_top_5_accuracy, outputs, l)
+    reg_loss = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
+    regularization_loss.update_state(reg_loss)
+
+  with strategy.scope():
+    # @tf.function
+    def run_single_step(iterator):
+      images, labels = next(iterator)
+      features, labels = images, {'labels': labels}
+      strategy.run(single_step, (features, labels))
+
+    iterator = iter(ds)
+    for i in range(eval_steps):
+      run_single_step(iterator)
+      logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
+    logging.info('Finished eval for %s', ckpt)
+
+  with strategy.scope():
+    # @tf.function
+    def run_single_step(iterator):
+      images, labels = next(iterator)
+      features, labels = images, {'labels': labels}
+      strategy.run(single_step2, (features, labels))
+
+    iterator = iter(ds2)
+    for i in range(eval_steps):
+      run_single_step(iterator)
+      logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
+    logging.info('Finished eval for %s', ckpt)
+
+  with strategy.scope():
+    # @tf.function
+    def run_single_step(iterator):
+      images, labels = next(iterator)
+      features, labels = images, {'labels': labels}
+      strategy.run(single_step3, (features, labels))
+
+    iterator = iter(ds3)
+    for i in range(eval_steps):
+      run_single_step(iterator)
+      logging.info('Completed eval for %d / %d steps', i + 1, eval_steps)
+    logging.info('Finished eval for %s', ckpt)
+
+  # Write summaries
+  cur_step = global_step.numpy()
+  logging.info('Writing summaries for %d step', cur_step)
+  with summary_writer.as_default():
+    metrics.log_and_write_metrics_to_summary(all_metrics, cur_step)
+    summary_writer.flush()
+
+  # Record results as JSON.
+  result_json_path = os.path.join(FLAGS.model_dir, 'result.json')
+  result = {metric.name: metric.result().numpy() for metric in all_metrics}
+  result['global_step'] = global_step.numpy()
+  logging.info(result)
+  with tf.io.gfile.GFile(result_json_path, 'w') as f:
+    json.dump({k: float(v) for k, v in result.items()}, f)
+  result_json_path = os.path.join(FLAGS.model_dir, 'result_%d.json'%result['global_step'])
+  with tf.io.gfile.GFile(result_json_path, 'w') as f:
+    json.dump({k: float(v) for k, v in result.items()}, f)
+  flag_json_path = os.path.join(FLAGS.model_dir, 'flags.json')
+  with tf.io.gfile.GFile(flag_json_path, 'w') as f:
+    serializable_flags = {}
+    for key, val in FLAGS.flag_values_dict().items():
+      # Some flag value types e.g. datetime.timedelta are not json serializable, filter those out.
+      if json_serializable(val):
+        serializable_flags[key] = val
+    json.dump(serializable_flags, f)
+
+  # Export as SavedModel for finetuning and inference.
+  save(model, global_step=result['global_step'])
+  return result
+
+def _restore_latest_or_from_pretrain(checkpoint_manager):
+  """Restores the latest ckpt if training already.
+  Or restores from FLAGS.checkpoint if in finetune mode.
   Args:
-    builder: TFDS builder for specified dataset.
-    global_batch_size: Global batch size.
-    topology: An instance of `tf.tpu.experimental.Topology` or None.
-    is_training: Whether to build in training mode.
-
-  Returns:
-    A function that accepts a dict of params and returns a tuple of images and
-    features, to be used as the input_fn in TPUEstimator.
+    checkpoint_manager: tf.traiin.CheckpointManager.
   """
-
-  def _input_fn(input_context):
-    """Inner input function."""
-    batch_size = input_context.get_per_replica_batch_size(global_batch_size)
-    logging.info('Global batch size: %d', global_batch_size)
-    logging.info('Per-replica batch size: %d', batch_size)
-    preprocess_fn_pretrain = get_preprocess_fn(is_training, is_pretrain=True)
-    preprocess_fn_finetune = get_preprocess_fn(is_training, is_pretrain=False)
-    # num_classes = builder.info.features['label'].num_classes
-    num_classes = 10
-
-    def map_fn(image, label):
-      """Produces multiple transformations of the same batch."""
-      if is_training and FLAGS.train_mode == 'pretrain':
-        xs = []
-        for _ in range(2):  # Two transformations
-          xs.append(preprocess_fn_pretrain(image))
-        image = tf.concat(xs, -1)
-      else:
-        image = preprocess_fn_finetune(image)
-      label = tf.one_hot(label, num_classes)
-      return image, label
-
-    logging.info('num_input_pipelines: %d', input_context.num_input_pipelines)
-    dataset=builder
-    # dataset = builder.as_dataset(
-    #     split=FLAGS.train_split if is_training else FLAGS.eval_split,
-    #     shuffle_files=is_training,
-    #     as_supervised=True,
-    #     # Passing the input_context to TFDS makes TFDS read different parts
-    #     # of the dataset on different workers. We also adjust the interleave
-    #     # parameters to achieve better performance.
-    #     read_config=tfds.ReadConfig(
-    #         interleave_cycle_length=32,
-    #         interleave_block_length=1,
-    #         input_context=input_context))
-    if FLAGS.cache_dataset:
-      dataset = dataset.cache()
-    if is_training:
-      options = tf.data.Options()
-      options.experimental_deterministic = False
-      options.experimental_slack = True
-      dataset = dataset.with_options(options)
-      buffer_multiplier = 50 if FLAGS.image_size <= 32 else 10
-      dataset = dataset.shuffle(batch_size * buffer_multiplier)
-      dataset = dataset.repeat(-1)
-    dataset = dataset.map(
-        map_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.batch(batch_size, drop_remainder=is_training)
-    dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-    return dataset
-
-  return _input_fn
+  latest_ckpt = checkpoint_manager.latest_checkpoint
+  if latest_ckpt:
+    # The model is not build yet so some variables may not be available in
+    # the object graph. Those are lazily initialized. To suppress the warning
+    # in that case we specify `expect_partial`.
+    logging.info('Restoring from %s', latest_ckpt)
+    checkpoint_manager.checkpoint.restore(latest_ckpt).expect_partial()
+  elif FLAGS.train_mode == 'finetune':
+    # Restore from pretrain checkpoint.
+    assert FLAGS.checkpoint, 'Missing pretrain checkpoint.'
+    logging.info('Restoring from %s', FLAGS.checkpoint)
+    checkpoint_manager.checkpoint.restore(FLAGS.checkpoint).expect_partial()
+    # TODO(iamtingchen): Can we instead use a zeros initializer for the
+    # supervised head?
+    if FLAGS.zero_init_logits_layer:
+      model = checkpoint_manager.checkpoint.model
+      output_layer_parameters = model.supervised_head.trainable_weights
+      logging.info('Initializing output layer parameters %s to zero',
+                   [x.op.name for x in output_layer_parameters])
+      for x in output_layer_parameters:
+        x.assign(tf.zeros_like(x))
 
 
-def build_distributed_dataset(builder, batch_size, is_training, strategy,
-                              topology):
-  input_fn = build_input_fn(builder, batch_size, topology, is_training)
-  return strategy.distribute_datasets_from_function(input_fn)
+def model_summary(mdl):
+  model_vars = mdl.trainable_variables
+  slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 
-def get_preprocess_fn(is_training, is_pretrain):
-  """Get function that accepts an image and returns a preprocessed image."""
-  # Disable test cropping for small images (e.g. CIFAR)
-  if FLAGS.image_size <= 32:
-    test_crop = False
+def main(argv):
+  if len(argv) > 1:
+    raise app.UsageError('Too many command-line arguments.')
+  builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
+  builder.download_and_prepare()
+  num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
+  num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
+  num_classes = builder.info.features['label'].num_classes
+  eval_steps = FLAGS.eval_steps or int(
+      math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+
+  train_steps_1 = model_lib.get_train_steps(num_train_examples)
+  epoch_steps_1 = int(round(num_train_examples / FLAGS.train_batch_size))
+  logging.info('# train examples M1: %d', num_train_examples)
+  logging.info('# train_steps M1: %d', train_steps_1)
+  logging.info('# epoch_steps M1: %d', epoch_steps_1)
+  logging.info('# eval examples M1: %d', num_eval_examples)
+  logging.info('# eval steps M1: %d', eval_steps)
+  checkpoint_steps_1 = (FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps_1))
+  topology = None
+  strategy = tf.distribute.MirroredStrategy()
+  logging.info('Running using MirroredStrategy on %d replicas',strategy.num_replicas_in_sync)
+
+  with strategy.scope():
+    model = model_lib.Model(num_classes)
+
+  if FLAGS.mode == 'eval':
+    for ckpt in tf.train.checkpoints_iterator(FLAGS.model_dir, min_interval_secs=15):
+      result = perform_evaluation(model, builder, eval_steps, ckpt, strategy, topology)
+      if result['global_step'] >= train_steps_1:
+        logging.info('Eval complete. Exiting...')
+        return
   else:
-    test_crop = True
-  color_jitter_strength = FLAGS.color_jitter_strength if is_pretrain else 0.
-  return functools.partial(
-      data_util.preprocess_image,
-      height=60,
-      width=FLAGS.image_size,
-      is_training=is_training,
-      color_jitter_strength=color_jitter_strength,
-      test_crop=test_crop)
+    summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
+    with strategy.scope():
+      # Build input pipeline.
+      ds = data_lib.build_distributed_dataset(dataset0, FLAGS.train_batch_size, True, strategy, topology)
+      # Build LR schedule and optimizer.
+      learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
+      optimizer = model_lib.build_optimizer(learning_rate)
+
+      # Build metrics.
+      all_metrics = []  # For summaries.
+      weight_decay_metric = tf.keras.metrics.Mean('train/weight_decay')
+      total_loss_metric = tf.keras.metrics.Mean('train/total_loss')
+      all_metrics.extend([weight_decay_metric, total_loss_metric])
+      if FLAGS.train_mode == 'pretrain':
+        contrast_loss_metric = tf.keras.metrics.Mean('train/contrast_loss')
+        contrast_acc_metric = tf.keras.metrics.Mean('train/contrast_acc')
+        contrast_entropy_metric = tf.keras.metrics.Mean('train/contrast_entropy')
+        all_metrics.extend([contrast_loss_metric, contrast_acc_metric, contrast_entropy_metric])
+      if FLAGS.train_mode == 'finetune' or FLAGS.lineareval_while_pretraining:
+        supervised_loss_metric = tf.keras.metrics.Mean('train/supervised_loss')
+        supervised_acc_metric = tf.keras.metrics.Mean('train/supervised_acc')
+        all_metrics.extend([supervised_loss_metric, supervised_acc_metric])
+
+      # Restore checkpoint if available.
+      checkpoint_manager = try_restore_from_checkpoint(model, optimizer.iterations, optimizer)
+
+    def single_step(features, labels):
+      with tf.GradientTape() as tape:
+        should_record = tf.equal((optimizer.iterations + 1) % checkpoint_steps_1, 0)
+        with tf.summary.record_if(should_record):
+          # Only log augmented images for the first tower.
+          tf.summary.image('image', features[:, :, :, :3], step=optimizer.iterations + 1)
+
+        projection_head_outputs, supervised_head_outputs, msh = model(features, training=True)
+        tape.watch(features)
+        loss = None
+        if projection_head_outputs is not None:
+          outputs = projection_head_outputs
+          con_loss, logits_con, labels_con = obj_lib.add_contrastive_loss(
+              outputs,hidden_norm=FLAGS.hidden_norm,temperature=FLAGS.temperature,strategy=strategy)
+          if loss is None:
+            loss = con_loss
+          else:
+            loss += con_loss
+          metrics.update_pretrain_metrics_train(contrast_loss_metric,contrast_acc_metric,
+                                                contrast_entropy_metric,con_loss, logits_con,labels_con)
+        if supervised_head_outputs is not None:
+          outputs = supervised_head_outputs
+          l = labels['labels']
+          if FLAGS.train_mode == 'pretrain' and FLAGS.lineareval_while_pretraining:
+            l = tf.concat([l, l], 0)
+          sup_loss = obj_lib.add_supervised_loss(labels=l, logits=outputs)
+          if loss is None:
+            loss = sup_loss
+          else:
+            loss += sup_loss
+          metrics.update_finetune_metrics_train(supervised_loss_metric,supervised_acc_metric, sup_loss,l, outputs)
+        weight_decay = model_lib.add_weight_decay(model, adjust_per_optimizer=True)
+        weight_decay_metric.update_state(weight_decay)
+        loss += weight_decay
+        total_loss_metric.update_state(loss)
+        # The default behavior of `apply_gradients` is to sum gradients from all
+        # replicas so we divide the loss by the number of replicas so that the mean gradient is applied.
+        loss = loss / strategy.num_replicas_in_sync
+        grads = tape.gradient(loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+    with strategy.scope():
+      @tf.function
+      def train_multiple_steps(iterator):
+        # `tf.range` is needed so that this runs in a `tf.while_loop` and is not unrolled.
+        for _ in tf.range(checkpoint_steps_1):
+          # Drop the "while" prefix created by tf.while_loop which otherwise gets prefixed to every variable name.
+          # This does not affect training but does affect the checkpoint conversion script. TODO(b/161712658): Remove this.
+          with tf.name_scope(''):
+            images, labels = next(iterator)
+            features, labels = images, {'labels': labels}
+            strategy.run(single_step, (features, labels))
+
+      global_step = optimizer.iterations
+      cur_step_1 = global_step.numpy()
+      iterator = iter(ds)
+      while cur_step_1 < train_steps_1:
+        # Calls to tf.summary.xyz lookup the summary writer resource which is
+        # set by the summary writer's context manager.
+        with summary_writer.as_default():
+          train_multiple_steps(iterator)
+          cur_step_1 = global_step.numpy()
+          checkpoint_manager.save(cur_step_1)
+          logging.info('Completed: %d / %d steps', cur_step_1, train_steps_1)
+          metrics.log_and_write_metrics_to_summary(all_metrics, cur_step_1)
+          tf.summary.scalar('learning_rate',learning_rate(tf.cast(global_step, dtype=tf.float32)),global_step)
+          summary_writer.flush()
+        for metric in all_metrics:
+          metric.reset_states()
+      logging.info('Training 1 complete...')
+
+    if FLAGS.mode == 'train_then_eval':
+      perform_evaluation(model, dataset2, dataset3, dataset4, eval_steps, checkpoint_manager.latest_checkpoint, strategy,topology)
+
+if __name__ == '__main__':
+  x_train_mnist = np.load('./Mx_train.npy'); y_train_mnist = np.load('./My_train.npy')
+  x_test_mnist = np.load('./Mx_test.npy'); y_test_mnist = np.load('./My_test.npy')
+  x_train_cifar10 = np.load('./x_train.npy'); y_train_cifar10 = np.load('./y_train.npy')
+  x_test_cifar10 = np.load('./x_test.npy'); y_test_cifar10 = np.load('./y_test.npy')
+
+  # Convert CIFAR-10 images to grayscale while still tensors
+  x_train_cifar10_gray = tf.image.rgb_to_grayscale(x_train_cifar10)
+  x_test_cifar10_gray = tf.image.rgb_to_grayscale(x_test_cifar10)
+  # Add a channel dimension to MNIST images while still tensors
+  x_train_mnist = tf.expand_dims(x_train_mnist, axis=-1)
+  x_test_mnist = tf.expand_dims(x_test_mnist, axis=-1)
+  # Ensure all images have 3 dimensions by converting to RGB while still tensors
+  x_train_mnist_rgb = tf.image.grayscale_to_rgb(x_train_mnist)
+  x_test_mnist_rgb = tf.image.grayscale_to_rgb(x_test_mnist)
+  x_train_cifar10_gray_rgb = tf.image.grayscale_to_rgb(x_train_cifar10_gray)
+  x_test_cifar10_gray_rgb = tf.image.grayscale_to_rgb(x_test_cifar10_gray)
+  # Convert TensorFlow tensors to NumPy arrays
+  x_train_mnist_rgb = x_train_mnist_rgb.numpy()
+  x_test_mnist_rgb = x_test_mnist_rgb.numpy()
+  x_train_cifar10_gray_rgb = x_train_cifar10_gray_rgb.numpy()
+  x_test_cifar10_gray_rgb = x_test_cifar10_gray_rgb.numpy()
+
+  # Function to combine MNIST and CIFAR-10 images
+  def combine_images(mnist_image, cifar10_image):
+      height_mnist, width_mnist = mnist_image.shape[:2]
+      height_cifar, width_cifar = cifar10_image.shape[:2]      
+      combined_image = np.zeros((height_mnist + height_cifar, max(width_mnist, width_cifar), 3), dtype=np.uint8)      
+      combined_image[:height_mnist, :width_mnist, :] = mnist_image
+      combined_image[height_mnist:, :width_cifar, :] = cifar10_image      
+      return combined_image
+
+  # Create combined training dataset
+  x_train_combined = []; y_train_combined = []
+
+  for label in range(10):
+    mnist_indices = np.where(y_train_mnist == label)[0]
+    cifar_indices = np.where(y_train_cifar10 == label)[0]
+    for mnist_idx, cifar_idx in zip(mnist_indices, cifar_indices):
+      combined_image = combine_images(x_train_mnist_rgb[mnist_idx], x_train_cifar10_gray_rgb[cifar_idx])
+      x_train_combined.append(combined_image)
+      y_train_combined.append(label)
+
+  x_test_combined = []; y_test_combined = []
+
+  # Ensure both datasets are the same length
+  min_test_samples = min(len(x_test_mnist_rgb), len(x_test_cifar10_gray_rgb))
+  x_test_mnist_rgb = x_test_mnist_rgb[:min_test_samples]
+  x_test_cifar10_gray_rgb = x_test_cifar10_gray_rgb[:min_test_samples]
+  y_test_mnist = y_test_mnist[:min_test_samples]
+
+  for label in range(10):
+    mnist_indices = np.where(y_test_mnist == label)[0]
+    cifar_indices = np.where(y_test_cifar10 == label)[0]
+    for mnist_idx, cifar_idx in zip(mnist_indices, cifar_indices):
+      combined_image = combine_images(x_test_mnist_rgb[mnist_idx], x_test_cifar10_gray_rgb[cifar_idx])
+      x_test_combined.append(combined_image)
+      y_test_combined.append(label)
+
+  # Convert lists to numpy arrays
+  x_train_combined = np.array(x_train_combined); y_train_combined = np.array(y_train_combined)
+  x_test_combined = np.array(x_test_combined); y_test_combined = np.array(y_test_combined)
+
+  x_nn01, y_nn01 = shuffle(np.array(x_train_combined), np.array(y_train_combined))
+  y_nn01=y_nn01.reshape(50000,)
+  Mydatasetx01 = tf.data.Dataset.from_tensor_slices(x_nn01)
+  Mydatasety01 = tf.data.Dataset.from_tensor_slices(y_nn01)
+  dataset0 = tf.data.Dataset.zip((Mydatasetx01, Mydatasety01))
+
+  x_nn02, y_nn02 = shuffle(np.array(x_test_combined), np.array(y_test_combined))
+  y_nn02=y_nn02.reshape(9786,)
+  Mydatasetx02 = tf.data.Dataset.from_tensor_slices(x_nn02)
+  Mydatasety02 = tf.data.Dataset.from_tensor_slices(y_nn02)
+  dataset2 = tf.data.Dataset.zip((Mydatasetx02, Mydatasety02))
+
+  # Shuffle the MNIST and CIFAR-10 test sets independently
+  indices = np.arange(len(x_test_mnist_rgb))
+  np.random.shuffle(indices)
+  x_test_mnist_rgb = x_test_mnist_rgb[indices]
+  y_test_mnist = y_test_mnist[indices]
+
+  np.random.shuffle(x_test_cifar10_gray_rgb)
+
+  # Create combined test dataset
+  x_test_combined = []; y_test_combined = []
+
+  for mnist_image, cifar_image, label in zip(x_test_mnist_rgb, x_test_cifar10_gray_rgb, y_test_mnist):
+      combined_image = combine_images(mnist_image, cifar_image)
+      x_test_combined.append(combined_image)
+      y_test_combined.append(label) 
+  
+  x_test_combined = np.array(x_test_combined); y_test_combined = np.array(y_test_combined)
+
+  x_nn03, y_nn03 = shuffle(np.array(x_test_combined), np.array(y_test_combined))
+  print('x_nn03', x_nn03.shape); print('y_nn03', y_nn03.shape)
+  y_nn03=y_nn03.reshape(10000,)
+  Mydatasetx03 = tf.data.Dataset.from_tensor_slices(x_nn03)
+  Mydatasety03 = tf.data.Dataset.from_tensor_slices(y_nn03)
+  dataset3 = tf.data.Dataset.zip((Mydatasetx03, Mydatasety03))
+
+  # Shuffle the MNIST and CIFAR-10 test sets independently
+  indices = np.arange(len(x_test_cifar10_gray_rgb))
+  np.random.shuffle(indices)
+  x_test_cifar10_gray_rgb = x_test_cifar10_gray_rgb[indices]
+  y_test_cifar = y_test_cifar10[indices]
+
+  np.random.shuffle(x_test_mnist_rgb)
+
+  # Create combined test dataset
+  x_test_combined = []; y_test_combined = []
+
+  for mnist_image, cifar_image, label in zip(x_test_mnist_rgb, x_test_cifar10_gray_rgb, y_test_cifar):
+      combined_image = combine_images(mnist_image, cifar_image)
+      x_test_combined.append(combined_image)
+      y_test_combined.append(label) 
+  
+  x_test_combined = np.array(x_test_combined); y_test_combined = np.array(y_test_combined)
+
+  x_nn04, y_nn04 = shuffle(np.array(x_test_combined), np.array(y_test_combined))
+  y_nn04=y_nn04.reshape(10000,)
+  Mydatasetx04 = tf.data.Dataset.from_tensor_slices(x_nn04)
+  Mydatasety04 = tf.data.Dataset.from_tensor_slices(y_nn04)
+  dataset4 = tf.data.Dataset.zip((Mydatasetx04, Mydatasety04))
+
+  tf.compat.v1.enable_v2_behavior()
+  # For outside compilation of summaries on TPU.
+  tf.config.set_soft_device_placement(True)
+  app.run(main)
