@@ -110,7 +110,7 @@ def get_preprocess_fn(is_training, is_pretrain):
   color_jitter_strength = FLAGS.color_jitter_strength if is_pretrain else 0.
   return functools.partial(
       data_util.preprocess_image,
-      height=70,
+      height=60,
       width=FLAGS.image_size,
       is_training=is_training,
       color_jitter_strength=color_jitter_strength,
