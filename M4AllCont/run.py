@@ -355,12 +355,10 @@ def main(argv):
     with strategy.scope():
       ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size, True, strategy, topology)
       learning_rate = model_lib.WarmUpAndCosineDecay(FLAGS.learning_rate, num_train_examples)
-      FLAGS.optimizer='adam'
-      optimizer_1 = model_lib.build_optimizer(0.001)
-      FLAGS.optimizer='lars'
       optimizer = model_lib.build_optimizer(learning_rate)
       optimizer_2 = model_lib.build_optimizer(learning_rate)
       optimizer_3 = model_lib.build_optimizer(learning_rate)
+      optimizer_1 = model_lib.build_optimizer(learning_rate)
       
       # Build metrics.
       all_metrics = []  # For summaries.
