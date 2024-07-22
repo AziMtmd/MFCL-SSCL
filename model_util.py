@@ -92,3 +92,31 @@ for i in range(10):
 print('mis', mis)
 print('nmis', nmis)
 print('pers', pers)
+
+
+from PIL import Image
+
+# Define the coordinates for the cropping box
+left = 1008
+top = 1952
+right = 1350
+bottom = 2593
+##4_31280nik
+##5_31280nik
+##6_31280nik
+#2_19550nik9
+# Open the image file
+for j in range(3,7):
+  for i in range(10):
+    esm="/content/"+str(j)+"_7820nik"+str(i)+".png"
+    image_path = esm
+    img = Image.open(image_path)
+
+    # Crop the image
+    img_cropped = img.crop((left, top, right, bottom))
+
+    # Save the cropped image
+    output_path = esm
+    img_cropped.save(output_path)
+
+  print(f"Cropped image saved to {output_path}")
