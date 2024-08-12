@@ -106,7 +106,7 @@ bottom = 2593
 ##6_31280nik
 #2_19550nik9
 # Open the image file
-for j in range(3,7):
+for j in range(2,7):
   for i in range(10):
     esm="/content/"+str(j)+"_7820nik"+str(i)+".png"
     image_path = esm
